@@ -1,0 +1,255 @@
+<!doctype html>
+<html class="no-js" lang="">
+<head>
+  <meta charset="UTF-8">
+  <title>Speed Catch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: red;
+  cursor: pointer;
+  margin-left: 10px;
+  font-size: 1.2em;
+}
+
+.delete-btn:hover {
+  color: darkred;
+}
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --accent: #4895ef;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --success: #4cc9f0;
+      --danger: #f72585;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      color: var(--dark);
+    }
+    
+    #game-container {
+      background: white;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    
+    h1 {
+      color: var(--primary);
+      margin-bottom: 20px;
+      font-size: 2.5rem;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    #difficulty {
+      margin: 20px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #difficulty label {
+      font-weight: bold;
+      color: var(--secondary);
+    }
+    
+    #difficultySelect {
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: 2px solid var(--accent);
+      background: white;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    #difficultySelect:hover {
+      border-color: var(--primary);
+    }
+    
+    #startButton {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin: 15px 0;
+    }
+    
+    #startButton:hover {
+      background: var(--secondary);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    #startButton:active {
+      transform: translateY(0);
+    }
+    
+    #gameCanvas {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #e0e0e0;
+    }
+    
+    #score {
+      font-size: 1.2rem;
+      margin: 15px 0;
+      font-weight: bold;
+      color: var(--secondary);
+    }
+    
+    #leaderboard {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 30px auto;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+    }
+    
+    #leaderboard h2 {
+      color: var(--primary);
+      margin-top: 0;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 10px;
+    }
+    
+    #scores-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    #scores-list li {
+      padding: 8px 12px;
+      margin: 5px 0;
+      background: rgba(67, 97, 238, 0.1);
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    #scores-list li:nth-child(odd) {
+      background: rgba(67, 97, 238, 0.05);
+    }
+
+    #musicToggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    }
+
+    #musicToggle {
+    transition: all 0.3s ease;
+    }
+
+    #musicToggle:hover {
+      transform: scale(1.1);
+    }
+    
+    @media (max-width: 600px) {
+      #game-container {
+        padding: 20px;
+      }
+      
+      #gameCanvas {
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <body>
+    <!-- Add this login section at the top -->
+    <div id="auth-container" style="max-width: 400px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+      <h2 style="color: var(--primary); text-align: center;">Login</h2>
+      <div id="login-form">
+        <input type="email" id="email" placeholder="Email" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+        <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+        <button id="login-btn" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer;">Login</button>
+        <button id="signup-btn" style="width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">Sign Up</button>
+      </div>
+      
+      <div id="user-info" style="display: none; text-align: center;">
+        <p>Logged in as: <span id="user-email"></span></p>
+        <button id="logout-btn" style="padding: 8px 15px; background: var(--danger); color: white; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
+      </div>
+    </div>
+
+  <div id="difficulty">
+    <label>Difficulty: </label>
+    <select id="difficultySelect">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
+
+  <!-- Game UI -->
+  <div id="game-container">
+    <h1>Speed Catch</h1>
+    <button id="startButton">Start Game</button>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <div id="score">Attempts: 3</div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div id="leaderboard">
+    <h2>Top Players</h2>
+    <ol id="scores-list"></ol>
+  </div>
+
+  <!-- Load your game script as module -->
+  <script type="module" src="js/main.js"></script>
+
+  <!-- Audio Elements -->
+<audio id="backgroundMusic" loop>
+  <source src="audio/background.mp3" type="audio/mpeg">
+</audio>
+<audio id="catchSound">
+  <source src="audio/miss.wav" type="audio/mpeg">
+</audio>
+<audio id="missSound">
+  <source src="audio/catch.wav" type="audio/mpeg">
+</audio>
+<button id="musicToggle">♪</button>
+</body>
+</html>
