@@ -7,7 +7,8 @@ import {
   orderBy, 
   limit, 
   onSnapshot, 
-  Timestamp 
+  Timestamp,
+  where 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { 
   getAuth, 
@@ -16,6 +17,9 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+// Add to your imports
+import { doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Initialize Firebase
 const firebaseConfig = {
@@ -74,9 +78,9 @@ let BASE_SPEED = 8;
 let SPEED_DECAY_RATE = 1;
 
 const difficulty = {
-  easy: { speed: 6, decay: 0.8 },
-  medium: { speed: 8, decay: 1 }, 
-  hard: { speed: 12, decay: 1.2 }
+  easy: { speed: 6, decay: 0.8, multiplier: 1 },
+  medium: { speed: 8, decay: 1, multiplier: 2 }, 
+  hard: { speed: 12, decay: 1.2, multiplier: 3 }
 };
 
 let lastFrameTime = performance.now();
@@ -106,11 +110,11 @@ async function logout() {
   }
 }
 
-// Update UI based on auth state
 function updateUI(user) {
   const loginForm = document.getElementById('login-form');
   const userInfo = document.getElementById('user-info');
   const userEmail = document.getElementById('user-email');
+  
   
   if (user) {
     // User is logged in
@@ -118,17 +122,23 @@ function updateUI(user) {
     userInfo.style.display = 'block';
     userEmail.textContent = user.email;
     
+    
     // Enable game elements
     document.getElementById('difficulty').style.display = 'flex';
     document.getElementById('game-container').style.display = 'block';
     document.getElementById('leaderboard').style.display = 'block';
     
+
+    
     // Prompt for player name
-    playerName = prompt("What do your friends call you?") || "Anonymous";
+    playerName = prompt('What is your name?');
+    
+    
   } else {
     // User is logged out
     loginForm.style.display = 'block';
     userInfo.style.display = 'none';
+    
     
     // Disable game elements
     document.getElementById('difficulty').style.display = 'none';
@@ -167,6 +177,8 @@ function startGame() {
   }
   
   if (gameActive) return;
+    // Enter fullscreen mode
+    enterFullscreen();
   if (musicOn) {
     bgMusic.currentTime = 0;
     bgMusic.play();
@@ -224,6 +236,7 @@ function update() {
     const now = performance.now();
     const deltaTime = (now - lastFrameTime) / 16;
     lastFrameTime = now;
+    
     
     ball.x += ball.vx * deltaTime;
     ball.y += ball.vy * deltaTime;
@@ -287,9 +300,14 @@ function drawSpeedMeter() {
 canvas.addEventListener("click", (e) => {
   if (!gameActive || !auth.currentUser) return;
   
+  // Get canvas position and scaling
   const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  
+  // Calculate canvas coordinates
+  const mouseX = (e.clientX - rect.left) * scaleX;
+  const mouseY = (e.clientY - rect.top) * scaleY;
   
   clickFeedback = {
     active: true,
@@ -297,15 +315,24 @@ canvas.addEventListener("click", (e) => {
     y: mouseY,
     time: performance.now()
   };
+
+  // In your click handler, after setting clickFeedback:
+ctx.beginPath();
+ctx.arc(mouseX, mouseY, 5, 0, Math.PI * 2);
+ctx.fillStyle = 'red';
+ctx.fill();
   
   const distance = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
   
   if (distance <= ball.r * 1.5) {
     catchSound.currentTime = 0;
     catchSound.play();
-    score = Math.round(ball.currentSpeed);
+    score = Math.round(ball.currentSpeed); // THIS IS THE CRITICAL LINE THAT WAS MISSING
+    const difficultyLevel = document.getElementById("difficultySelect").value;
+    const multiplier = difficulty[difficultyLevel].multiplier;
+    
     saveScore(playerName, score);
-    alert(`Caught at ${score}% speed!`);
+    alert(`Caught at ${score}% speed! (${multiplier}x multiplier = ${score * multiplier} points)`);
     endGame();
   } else {
     missSound.currentTime = 0;
@@ -316,6 +343,7 @@ canvas.addEventListener("click", (e) => {
     if (attemptsLeft <= 0) {
       alert("Game over!");
       endGame();
+      
     }
   }
 });
@@ -326,6 +354,8 @@ function endGame() {
   clearInterval(speedDecayInterval);
   ball.vx = 0;
   ball.vy = 0;
+    // Exit fullscreen mode
+    exitFullscreen();
 }
 
 function getRandomColor() {
@@ -334,34 +364,191 @@ function getRandomColor() {
 
 async function saveScore(name, score) {
   if (!auth.currentUser) return;
+  const baseScore = Math.round(ball.currentSpeed);
+  const difficultyLevel = document.getElementById("difficultySelect").value;
+  const multiplier = difficulty[difficultyLevel].multiplier;
+  const finalScore = baseScore * multiplier;
+
+  // Validate inputs
+  if (typeof name !== 'string' || name.length > 20) {
+    alert("Invalid name");
+    return;
+  }
+  
+  if (typeof score !== 'number' || score < 0 || score > 1000) {
+    alert("Invalid score");
+    return;
+  }
   
   await addDoc(collection(db, "scores"), {
     name,
-    score,
+    score: finalScore,
+    baseScore: score, // Store original score for reference
+    multiplier: multiplier,
+    difficulty: difficultyLevel,
     timestamp: Timestamp.now(),
     userId: auth.currentUser.uid
   });
 }
 
+// Modify your showLeaderboard function to include delete buttons
 function showLeaderboard() {
   const q = query(
     collection(db, "scores"),
     orderBy("score", "desc"),
-    limit(10)
+    limit(100)
   );
-  
+
   onSnapshot(q, (snapshot) => {
-    const leaderboard = document.getElementById("scores-list");
-    leaderboard.innerHTML = "";
+    const leaderboard = document.getElementById('scores-list');
+    leaderboard.innerHTML = '';
+    
     snapshot.forEach((doc) => {
+      const data = doc.data();
       const li = document.createElement("li");
-      li.textContent = `${doc.data().name}: ${doc.data().score}`;
+      
+      // Create score text
+      const scoreText = document.createElement("span");
+      scoreText.textContent = `${data.name}: ${data.score}`;
+      
+      // Add delete button if it's the user's score
+      if (auth.currentUser && data.userId === auth.currentUser.uid) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "×";
+        deleteBtn.className = "delete-btn";
+        deleteBtn.onclick = () => deleteScore(doc.id, data.userId);
+        
+        li.appendChild(scoreText);
+        li.appendChild(deleteBtn);
+        li.style.backgroundColor = "#ffeeba";
+      } else {
+        li.appendChild(scoreText);
+      }
+      
       leaderboard.appendChild(li);
     });
   });
 }
 
+
+function showUserScoreHistory(userId) {
+  const userScoresList = document.getElementById('user-scores-list');
+  userScoresList.innerHTML = '<li>Loading your scores...</li>';
+  
+  const q = query(
+    collection(db, "scores"),
+    where("userId", "==", userId),
+    orderBy("timestamp", "desc"),
+    limit(20)
+  );
+  
+  onSnapshot(q, (snapshot) => {
+  
+    
+    userScoresList.innerHTML = '';
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const li = document.createElement('li');
+      li.style.padding = '5px 0';
+      li.style.borderBottom = '1px solid #eee';
+      
+      // Format the date nicely
+      const date = data.timestamp.toDate();
+      const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      
+      // Show multiplier info if it exists (for backward compatibility)
+      const multiplierInfo = data.multiplier > 1 ? 
+        ` (${data.baseScore || data.score} × ${data.multiplier})` : '';
+      
+      li.textContent = `${data.score}%${multiplierInfo} - ${formattedDate} (${data.difficulty || 'easy'})`;
+      userScoresList.appendChild(li);
+    });
+  });
+}
+
+// Fullscreen functions
+function enterFullscreen() {
+  const canvas = document.getElementById("gameCanvas");
+  
+  if (canvas.requestFullscreen) {
+    canvas.requestFullscreen();
+  } else if (canvas.webkitRequestFullscreen) { /* Safari */
+    canvas.webkitRequestFullscreen();
+  } else if (canvas.msRequestFullscreen) { /* IE11 */
+    canvas.msRequestFullscreen();
+  }
+}
+
+function exitFullscreen() {
+  if (document.exitFullscreen) {
+    document.exitFullscreen();
+  } else if (document.webkitExitFullscreen) { /* Safari */
+    document.webkitExitFullscreen();
+  } else if (document.msExitFullscreen) { /* IE11 */
+    document.msExitFullscreen();
+  }
+}
+
+// Handle fullscreen change events
+document.addEventListener('fullscreenchange', handleFullscreenChange);
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+function handleFullscreenChange() {
+  const isFullscreen = document.fullscreenElement || 
+                      document.webkitFullscreenElement || 
+                      document.msFullscreenElement;
+  
+  if (isFullscreen) {
+    // Adjust canvas size to match fullscreen
+    resizeCanvas();
+  } else {
+    // Return canvas to original size
+    resizeCanvas(false);
+  }
+}
+
+function resizeCanvas(fullscreen = true) {
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  
+  if (fullscreen) {
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * scale;
+    canvas.height = window.innerHeight * scale;
+    ctx.scale(scale, scale);
+  } else {
+    // Return to original size
+    canvas.width = 800;
+    canvas.height = 600;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  
+  if (gameActive) {
+    resetBall();
+  }
+}
+
+// Add this function to delete scores with proper access control
+async function deleteScore(scoreId, userId) {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    alert("You can only delete your own scores!");
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, "scores", scoreId));
+    alert("Score deleted successfully!");
+  } catch (error) {
+    alert("Error deleting score: " + error.message);
+  }
+}
+
 // Initialize
-resetBall();
-update();
-showLeaderboard();
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    resetBall();
+    update();
+    showLeaderboard();
+  }
+});
