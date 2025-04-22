@@ -8,7 +8,11 @@ import {
   limit, 
   onSnapshot, 
   Timestamp,
-  where 
+  where,
+  doc,
+  deleteDoc,
+  getDoc,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { 
   getAuth, 
@@ -17,9 +21,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-// Add to your imports
-import { doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Initialize Firebase
 const firebaseConfig = {
@@ -59,7 +60,7 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 let ballVisible = false;
 let clickFeedback = { active: false, x: 0, y: 0, time: 0 };
-let playerName = "Anonymous"; // Will be set after login
+let playerName = "Anonymous";
 let score = 0;
 let attemptsLeft = 3;
 let gameActive = false;
@@ -87,10 +88,25 @@ let lastFrameTime = performance.now();
 
 // Authentication functions
 async function login(email, password) {
+  if (!email || !password) {
+    console.error("Login failed: Email or password is empty");
+    alert("Please enter both email and password");
+    return;
+  }
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log("Login successful:", userCredential.user.email);
   } catch (error) {
-    alert("Login failed: " + error.message);
+    console.error("Login failed:", error.code, error.message);
+    let message = "Login failed";
+    if (error.code === 'auth/invalid-credential') {
+      message = "Invalid email or password";
+    } else if (error.code === 'auth/user-not-found') {
+      message = "No user found with this email";
+    } else if (error.code === 'auth/wrong-password') {
+      message = "Incorrect password";
+    }
+    alert(`${message}: ${error.message}`);
   }
 }
 
@@ -98,6 +114,7 @@ async function signup(email, password) {
   try {
     await createUserWithEmailAndPassword(auth, email, password);
   } catch (error) {
+    console.error("Signup failed:", error.code, error.message);
     alert("Signup failed: " + error.message);
   }
 }
@@ -106,6 +123,7 @@ async function logout() {
   try {
     await signOut(auth);
   } catch (error) {
+    console.error("Logout failed:", error);
     alert("Logout failed: " + error.message);
   }
 }
@@ -115,32 +133,19 @@ function updateUI(user) {
   const userInfo = document.getElementById('user-info');
   const userEmail = document.getElementById('user-email');
   
+  console.log("Updating UI for user:", user ? user.email : "null");
   
   if (user) {
-    // User is logged in
     loginForm.style.display = 'none';
     userInfo.style.display = 'block';
     userEmail.textContent = user.email;
-    
-    
-    // Enable game elements
     document.getElementById('difficulty').style.display = 'flex';
     document.getElementById('game-container').style.display = 'block';
     document.getElementById('leaderboard').style.display = 'block';
-    
-
-    
-    // Prompt for player name
-    playerName = prompt('What is your name?');
-    
-    
+    playerName = prompt('What is your name?') || "Anonymous";
   } else {
-    // User is logged out
     loginForm.style.display = 'block';
     userInfo.style.display = 'none';
-    
-    
-    // Disable game elements
     document.getElementById('difficulty').style.display = 'none';
     document.getElementById('game-container').style.display = 'none';
     document.getElementById('leaderboard').style.display = 'none';
@@ -162,9 +167,29 @@ document.getElementById('signup-btn').addEventListener('click', () => {
 
 document.getElementById('logout-btn').addEventListener('click', logout);
 
-// Listen for auth state changes
-onAuthStateChanged(auth, (user) => {
+// Consolidated auth state listener
+onAuthStateChanged(auth, async (user) => {
   updateUI(user);
+  if (user) {
+    try {
+      resetBall();
+      update();
+      await showLeaderboard();
+      const isUserAdmin = await isAdmin();
+      const adminPanel = document.getElementById('admin-panel');
+      if (isUserAdmin && adminPanel) {
+        adminPanel.style.display = 'block';
+        document.getElementById('delete-all-scores')?.addEventListener('click', deleteAllScores);
+      } else if (adminPanel) {
+        adminPanel.style.display = 'none';
+      }
+    } catch (error) {
+      console.error("Error in auth state change:", error);
+    }
+  } else {
+    const adminPanel = document.getElementById('admin-panel');
+    if (adminPanel) adminPanel.style.display = 'none';
+  }
 });
 
 // Start game button
@@ -175,32 +200,25 @@ function startGame() {
     alert("Please login to play the game!");
     return;
   }
-  
   if (gameActive) return;
-    // Enter fullscreen mode
-    enterFullscreen();
+  enterFullscreen();
   if (musicOn) {
     bgMusic.currentTime = 0;
     bgMusic.play();
   }
-  
   const difficultyLevel = document.getElementById("difficultySelect").value;
-  
   gameActive = true;
   attemptsLeft = 3;
   score = 0;
   ballVisible = true;
-  
   resetBall();
   ball.currentSpeed = 100;
   BASE_SPEED = difficulty[difficultyLevel].speed;
   SPEED_DECAY_RATE = difficulty[difficultyLevel].decay;
-  
   do {
     ball.vx = (Math.random() * 2 - 1) * BASE_SPEED;
     ball.vy = (Math.random() * 2 - 1) * BASE_SPEED;
   } while (Math.abs(ball.vx) < 0.5 || Math.abs(ball.vy) < 0.5);
-  
   if (speedDecayInterval) clearInterval(speedDecayInterval);
   speedDecayInterval = setInterval(() => {
     if (gameActive) {
@@ -208,7 +226,6 @@ function startGame() {
       updateSpeed();
     }
   }, 1000);
-  
   lastFrameTime = performance.now();
   update();
 }
@@ -224,23 +241,18 @@ function updateSpeed() {
   const speedFactor = ball.currentSpeed / 100;
   const directionX = ball.vx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vx);
   const directionY = ball.vy === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vy);
-  
   ball.vx = directionX * BASE_SPEED * speedFactor;
   ball.vy = directionY * BASE_SPEED * speedFactor;
 }
 
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
   if (gameActive) {
     const now = performance.now();
     const deltaTime = (now - lastFrameTime) / 16;
     lastFrameTime = now;
-    
-    
     ball.x += ball.vx * deltaTime;
     ball.y += ball.vy * deltaTime;
-    
     if (ball.x < ball.r) {
       ball.x = ball.r;
       ball.vx *= -1;
@@ -250,7 +262,6 @@ function update() {
       ball.vx *= -1;
       ball.color = getRandomColor();
     }
-    
     if (ball.y < ball.r) {
       ball.y = ball.r;
       ball.vy *= -1;
@@ -261,11 +272,9 @@ function update() {
       ball.color = getRandomColor();
     }
   }
-  
   if (ballVisible) {
     drawBall();
   }
-  
   if (clickFeedback.active) {
     const fade = 1 - (performance.now() - clickFeedback.time) / 500;
     if (fade > 0) {
@@ -278,7 +287,6 @@ function update() {
       clickFeedback.active = false;
     }
   }
-  
   drawSpeedMeter();
   requestAnimationFrame(update);
 }
@@ -299,38 +307,28 @@ function drawSpeedMeter() {
 
 canvas.addEventListener("click", (e) => {
   if (!gameActive || !auth.currentUser) return;
-  
-  // Get canvas position and scaling
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  
-  // Calculate canvas coordinates
   const mouseX = (e.clientX - rect.left) * scaleX;
   const mouseY = (e.clientY - rect.top) * scaleY;
-  
   clickFeedback = {
     active: true,
     x: mouseX,
     y: mouseY,
     time: performance.now()
   };
-
-  // In your click handler, after setting clickFeedback:
-ctx.beginPath();
-ctx.arc(mouseX, mouseY, 5, 0, Math.PI * 2);
-ctx.fillStyle = 'red';
-ctx.fill();
-  
+  ctx.beginPath();
+  ctx.arc(mouseX, mouseY, 5, 0, Math.PI * 2);
+  ctx.fillStyle = 'red';
+  ctx.fill();
   const distance = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
-  
   if (distance <= ball.r * 1.5) {
     catchSound.currentTime = 0;
     catchSound.play();
-    score = Math.round(ball.currentSpeed); // THIS IS THE CRITICAL LINE THAT WAS MISSING
+    score = Math.round(ball.currentSpeed);
     const difficultyLevel = document.getElementById("difficultySelect").value;
     const multiplier = difficulty[difficultyLevel].multiplier;
-    
     saveScore(playerName, score);
     alert(`Caught at ${score}% speed! (${multiplier}x multiplier = ${score * multiplier} points)`);
     endGame();
@@ -339,11 +337,9 @@ ctx.fill();
     missSound.play();
     attemptsLeft--;
     document.getElementById("score").textContent = `Attempts: ${attemptsLeft}`;
-    
     if (attemptsLeft <= 0) {
       alert("Game over!");
       endGame();
-      
     }
   }
 });
@@ -354,8 +350,7 @@ function endGame() {
   clearInterval(speedDecayInterval);
   ball.vx = 0;
   ball.vy = 0;
-    // Exit fullscreen mode
-    exitFullscreen();
+  exitFullscreen();
 }
 
 function getRandomColor() {
@@ -368,22 +363,18 @@ async function saveScore(name, score) {
   const difficultyLevel = document.getElementById("difficultySelect").value;
   const multiplier = difficulty[difficultyLevel].multiplier;
   const finalScore = baseScore * multiplier;
-
-  // Validate inputs
   if (typeof name !== 'string' || name.length > 20) {
     alert("Invalid name");
     return;
   }
-  
   if (typeof score !== 'number' || score < 0 || score > 1000) {
     alert("Invalid score");
     return;
   }
-  
   await addDoc(collection(db, "scores"), {
     name,
     score: finalScore,
-    baseScore: score, // Store original score for reference
+    baseScore: score,
     multiplier: multiplier,
     difficulty: difficultyLevel,
     timestamp: Timestamp.now(),
@@ -391,90 +382,83 @@ async function saveScore(name, score) {
   });
 }
 
-// Modify your showLeaderboard function to include delete buttons
-function showLeaderboard() {
+async function showLeaderboard() {
   const q = query(
     collection(db, "scores"),
     orderBy("score", "desc"),
     limit(100)
   );
-
+  let isUserAdmin = false;
+  try {
+    isUserAdmin = auth.currentUser ? await isAdmin() : false;
+  } catch (error) {
+    console.error("Failed to check admin status in leaderboard:", error);
+  }
   onSnapshot(q, (snapshot) => {
     const leaderboard = document.getElementById('scores-list');
+    if (!leaderboard) {
+      console.error("Leaderboard element not found");
+      return;
+    }
     leaderboard.innerHTML = '';
-    
     snapshot.forEach((doc) => {
       const data = doc.data();
       const li = document.createElement("li");
-      
-      // Create score text
       const scoreText = document.createElement("span");
       scoreText.textContent = `${data.name}: ${data.score}`;
-      
-      // Add delete button if it's the user's score
-      if (auth.currentUser && data.userId === auth.currentUser.uid) {
+      if (auth.currentUser && (data.userId === auth.currentUser.uid || isUserAdmin)) {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "×";
         deleteBtn.className = "delete-btn";
         deleteBtn.onclick = () => deleteScore(doc.id, data.userId);
-        
         li.appendChild(scoreText);
         li.appendChild(deleteBtn);
-        li.style.backgroundColor = "#ffeeba";
+        if (data.userId === auth.currentUser.uid) {
+          li.style.backgroundColor = "#ffeeba";
+        }
       } else {
         li.appendChild(scoreText);
       }
-      
       leaderboard.appendChild(li);
     });
+  }, (error) => {
+    console.error("Error in leaderboard snapshot:", error);
   });
 }
 
-
-function showUserScoreHistory(userId) {
+async function showUserScoreHistory(userId) {
   const userScoresList = document.getElementById('user-scores-list');
   userScoresList.innerHTML = '<li>Loading your scores...</li>';
-  
   const q = query(
     collection(db, "scores"),
     where("userId", "==", userId),
     orderBy("timestamp", "desc"),
     limit(20)
   );
-  
   onSnapshot(q, (snapshot) => {
-  
-    
     userScoresList.innerHTML = '';
     snapshot.forEach((doc) => {
       const data = doc.data();
       const li = document.createElement('li');
       li.style.padding = '5px 0';
       li.style.borderBottom = '1px solid #eee';
-      
-      // Format the date nicely
       const date = data.timestamp.toDate();
       const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-      
-      // Show multiplier info if it exists (for backward compatibility)
       const multiplierInfo = data.multiplier > 1 ? 
         ` (${data.baseScore || data.score} × ${data.multiplier})` : '';
-      
       li.textContent = `${data.score}%${multiplierInfo} - ${formattedDate} (${data.difficulty || 'easy'})`;
       userScoresList.appendChild(li);
     });
   });
 }
 
-// Fullscreen functions
 function enterFullscreen() {
   const canvas = document.getElementById("gameCanvas");
-  
   if (canvas.requestFullscreen) {
     canvas.requestFullscreen();
-  } else if (canvas.webkitRequestFullscreen) { /* Safari */
+  } else if (canvas.webkitRequestFullscreen) {
     canvas.webkitRequestFullscreen();
-  } else if (canvas.msRequestFullscreen) { /* IE11 */
+  } else if (canvas.msRequestFullscreen) {
     canvas.msRequestFullscreen();
   }
 }
@@ -482,14 +466,13 @@ function enterFullscreen() {
 function exitFullscreen() {
   if (document.exitFullscreen) {
     document.exitFullscreen();
-  } else if (document.webkitExitFullscreen) { /* Safari */
+  } else if (document.webkitExitFullscreen) {
     document.webkitExitFullscreen();
-  } else if (document.msExitFullscreen) { /* IE11 */
+  } else if (document.msExitFullscreen) {
     document.msExitFullscreen();
   }
 }
 
-// Handle fullscreen change events
 document.addEventListener('fullscreenchange', handleFullscreenChange);
 document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 document.addEventListener('msfullscreenchange', handleFullscreenChange);
@@ -498,12 +481,9 @@ function handleFullscreenChange() {
   const isFullscreen = document.fullscreenElement || 
                       document.webkitFullscreenElement || 
                       document.msFullscreenElement;
-  
   if (isFullscreen) {
-    // Adjust canvas size to match fullscreen
     resizeCanvas();
   } else {
-    // Return canvas to original size
     resizeCanvas(false);
   }
 }
@@ -511,44 +491,75 @@ function handleFullscreenChange() {
 function resizeCanvas(fullscreen = true) {
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
-  
   if (fullscreen) {
     const scale = window.devicePixelRatio || 1;
     canvas.width = window.innerWidth * scale;
     canvas.height = window.innerHeight * scale;
     ctx.scale(scale, scale);
   } else {
-    // Return to original size
     canvas.width = 800;
     canvas.height = 600;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
-  
   if (gameActive) {
     resetBall();
   }
 }
 
-// Add this function to delete scores with proper access control
 async function deleteScore(scoreId, userId) {
-  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+  if (!auth.currentUser) {
+    console.error("No authenticated user");
+    alert("You must be logged in!");
+    return;
+  }
+  const isUserAdmin = await isAdmin();
+  if (!isUserAdmin && auth.currentUser.uid !== userId) {
+    console.error("Unauthorized attempt to delete score", { scoreId, userId });
     alert("You can only delete your own scores!");
     return;
   }
-
   try {
     await deleteDoc(doc(db, "scores", scoreId));
+    console.log("Score deleted:", scoreId);
     alert("Score deleted successfully!");
   } catch (error) {
+    console.error("Error deleting score:", error.code, error.message);
     alert("Error deleting score: " + error.message);
   }
 }
 
-// Initialize
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    resetBall();
-    update();
-    showLeaderboard();
+async function deleteAllScores() {
+  if (!auth.currentUser || !(await isAdmin())) {
+    console.error("Admin access required for deleteAllScores");
+    alert("Admin access required!");
+    return;
   }
-});
+  if (!confirm("Are you sure you want to delete ALL scores? This cannot be undone!")) {
+    return;
+  }
+  try {
+    const scoresSnapshot = await getDocs(collection(db, "scores"));
+    const deletePromises = scoresSnapshot.docs.map((doc) => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    console.log("All scores deleted");
+    alert("All scores deleted successfully!");
+  } catch (error) {
+    console.error("Error deleting all scores:", error);
+    alert("Error deleting scores: " + error.message);
+  }
+}
+
+async function isAdmin() {
+  if (!auth.currentUser) {
+    console.log("No authenticated user for admin check");
+    return false;
+  }
+  try {
+    const adminDoc = await getDoc(doc(db, "adminUsers", auth.currentUser.uid));
+    console.log("Admin check for UID", auth.currentUser.uid, ":", adminDoc.exists() ? "Admin" : "Not admin");
+    return adminDoc.exists();
+  } catch (error) {
+    console.error("Error checking admin status:", error.code, error.message);
+    return false;
+  }
+}
