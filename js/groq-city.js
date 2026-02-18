@@ -37,7 +37,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Groq API Key - FIXED the reference
-const GROQ_API_KEY = "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"; 
+const GROQ_API_KEY = "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"; 
 
 // Game State
 let currentUser = null;
@@ -626,132 +626,7 @@ window.buyItem = async (itemId) => {
   }
 };
 
-// ==================== ADVENTURE ENGINE ====================
-
-function initAdventureEngine() {
-  const input = document.getElementById('adventure-input');
-  const submitBtn = document.getElementById('adventure-submit');
-  const clearBtn = document.getElementById('adventure-clear');
-  
-  if (!input || !submitBtn || !clearBtn) return;
-  
-  // Only add welcome message if history is empty
-  if (adventureState.history.length === 0) {
-    addStoryEntry("⚔️ Your adventure begins in Groq City. The neon lights flicker overhead as you step into the shadows...", "system");
-  } else {
-    displayAdventureHistory();
-  }
-  
-  submitBtn.addEventListener('click', async () => {
-    const action = input.value.trim();
-    if (!action || adventureState.isProcessing) return;
-    
-    input.value = '';
-    await processAdventureAction(action);
-  });
-  
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !adventureState.isProcessing) {
-      submitBtn.click();
-    }
-  });
-  
-  clearBtn.addEventListener('click', () => {
-    if (confirm('Start a new adventure? Your current story will be saved.')) {
-      adventureState.history = [];
-      adventureState.context = {
-        location: "Groq City Streets",
-        quest: "None",
-        health: 100,
-        inventory: []
-      };
-      const storyLog = document.getElementById('story-log');
-      if (storyLog) storyLog.innerHTML = '';
-      addStoryEntry("⚔️ You start a new adventure in Groq City...", "system");
-      saveAdventureState();
-    }
-  });
-}
-
-function addStoryEntry(text, type = "player") {
-  const storyLog = document.getElementById('story-log');
-  if (!storyLog) return;
-  
-  const entry = document.createElement('div');
-  entry.className = 'story-entry';
-  
-  let prefix = "👤";
-  let color = "#4ecdc4";
-  
-  switch(type) {
-    case "system":
-      prefix = "⚙️";
-      color = "#ffe66d";
-      break;
-    case "ai":
-      prefix = "🤖";
-      color = "#ff6b6b";
-      break;
-    case "combat":
-      prefix = "⚔️";
-      color = "#ff0000";
-      break;
-    case "loot":
-      prefix = "💰";
-      color = "#ffd700";
-      break;
-    default:
-      prefix = "👤";
-      color = "#4ecdc4";
-  }
-  
-  entry.innerHTML = `<span style="color: ${color};">${prefix}</span> ${text}`;
-  entry.style.marginBottom = '10px';
-  entry.style.padding = '5px';
-  entry.style.borderLeft = `3px solid ${color}`;
-  entry.style.paddingLeft = '10px';
-  entry.style.animation = 'fadeIn 0.3s ease';
-  
-  storyLog.appendChild(entry);
-  storyLog.scrollTop = storyLog.scrollHeight;
-  
-  adventureState.history.push({
-    text,
-    type,
-    timestamp: new Date().toISOString()
-  });
-  
-  if (adventureState.history.length > 100) {
-    adventureState.history.shift();
-  }
-}
-
-function displayAdventureHistory() {
-  const storyLog = document.getElementById('story-log');
-  if (!storyLog) return;
-  
-  storyLog.innerHTML = '';
-  adventureState.history.forEach(entry => {
-    const prefix = entry.type === "player" ? "👤" : 
-                   entry.type === "system" ? "⚙️" :
-                   entry.type === "combat" ? "⚔️" :
-                   entry.type === "loot" ? "💰" : "🤖";
-    const color = entry.type === "player" ? "#4ecdc4" :
-                  entry.type === "system" ? "#ffe66d" :
-                  entry.type === "combat" ? "#ff0000" :
-                  entry.type === "loot" ? "#ffd700" : "#ff6b6b";
-    
-    const div = document.createElement('div');
-    div.className = 'story-entry';
-    div.innerHTML = `<span style="color: ${color};">${prefix}</span> ${entry.text}`;
-    div.style.marginBottom = '10px';
-    div.style.padding = '5px';
-    div.style.borderLeft = `3px solid ${color}`;
-    div.style.paddingLeft = '10px';
-    storyLog.appendChild(div);
-  });
-  storyLog.scrollTop = storyLog.scrollHeight;
-}
+// ==================== ADVENTURE ENGINE (FIXED) ====================
 
 async function processAdventureAction(action) {
   if (!currentUser) {
@@ -761,9 +636,11 @@ async function processAdventureAction(action) {
   
   adventureState.isProcessing = true;
   const submitBtn = document.getElementById('adventure-submit');
+  const input = document.getElementById('adventure-input');
   const originalText = submitBtn.textContent;
   submitBtn.textContent = '🤔 Thinking...';
   submitBtn.disabled = true;
+  input.disabled = true;
   
   addStoryEntry(action, "player");
   
@@ -772,29 +649,61 @@ async function processAdventureAction(action) {
     
     if (GROQ_API_KEY) {
       const contextPrompt = buildAdventureContext(action);
-      const response = await queryGroq(contextPrompt, "You are a text adventure game master for a gritty crime city. Generate immersive responses in JSON format.");
+      console.log("Sending prompt to Groq:", contextPrompt); // Debug log
+      
+      const response = await queryGroq(contextPrompt, `You are a text adventure game master for a gritty crime city called "Groq City". 
+        You MUST respond with ONLY valid JSON in this exact format, no other text:
+        {
+          "narrative": "A vivid, immersive description (2-3 sentences)",
+          "location": "New location or same",
+          "quest": "New quest or same", 
+          "healthChange": 0,
+          "moneyChange": 0,
+          "reputationChange": 0,
+          "itemFound": null,
+          "combat": false
+        }
+        
+        Be creative! Generate different responses based on the player's action. Don't repeat the same scenarios.`);
+      
+      console.log("Raw Groq response:", response); // Debug log
       
       if (response) {
-        try {
-          // Try to parse JSON from response
-          const jsonMatch = response.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
+        // Try to extract JSON from the response (in case there's extra text)
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
             aiResponse = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error("No JSON found");
+            console.log("Parsed AI response:", aiResponse); // Debug log
+          } catch (e) {
+            console.error("Failed to parse JSON:", e);
+            // Create a creative response from the text if JSON parsing fails
+            aiResponse = createResponseFromText(response, action);
           }
-        } catch (e) {
-          console.error("Failed to parse AI response:", e);
-          aiResponse = getFallbackAdventureResponse(action);
+        } else {
+          // If no JSON found, create response from text
+          aiResponse = createResponseFromText(response, action);
         }
       } else {
-        aiResponse = getFallbackAdventureResponse(action);
+        // If no response, use creative fallback
+        aiResponse = getCreativeFallbackResponse(action);
       }
     } else {
-      aiResponse = getFallbackAdventureResponse(action);
+      aiResponse = getCreativeFallbackResponse(action);
     }
     
-    const parsedResponse = parseAdventureResponse(aiResponse);
+    // Ensure all required fields exist
+    const parsedResponse = {
+      narrative: aiResponse.narrative || "The city streets stretch before you, full of possibilities...",
+      location: aiResponse.location || adventureState.context.location,
+      quest: aiResponse.quest || adventureState.context.quest,
+      healthChange: aiResponse.healthChange || 0,
+      moneyChange: aiResponse.moneyChange || 0,
+      reputationChange: aiResponse.reputationChange || 0,
+      itemFound: aiResponse.itemFound || null,
+      combat: aiResponse.combat || false
+    };
+    
     addStoryEntry(parsedResponse.narrative, "ai");
     await updateGameFromAdventure(parsedResponse);
     await saveAdventureState();
@@ -806,45 +715,48 @@ async function processAdventureAction(action) {
     adventureState.isProcessing = false;
     submitBtn.textContent = originalText;
     submitBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
   }
 }
 
-function buildAdventureContext(action) {
-  const recentHistory = adventureState.history.slice(-5).map(h => 
-    `${h.type === 'player' ? 'Player' : 'Game'}: ${h.text}`
-  ).join('\n');
+// Helper function to create a response from text if JSON parsing fails
+function createResponseFromText(text, action) {
+  // Default response structure
+  const response = {
+    narrative: text.substring(0, 200), // Use first 200 chars as narrative
+    location: adventureState.context.location,
+    quest: adventureState.context.quest,
+    healthChange: 0,
+    moneyChange: 0,
+    reputationChange: 0,
+    itemFound: null,
+    combat: false
+  };
   
-  return `You are the AI narrator for a gritty crime city adventure game called "Groq City". 
-The player is currently in: ${adventureState.context.location}
-Current quest: ${adventureState.context.quest}
-Player health: ${adventureState.context.health}
-Player inventory: ${adventureState.context.inventory.join(', ') || 'empty'}
-Player stats: Str ${playerData.stats.strength}, Agi ${playerData.stats.agility}, Int ${playerData.stats.intelligence}
-
-Recent events:
-${recentHistory}
-
-The player action: "${action}"
-
-Generate a response in this exact JSON format:
-{
-  "narrative": "A vivid, immersive description of what happens (2-3 sentences)",
-  "location": "New location if changed",
-  "quest": "New quest if given/completed",
-  "healthChange": number (negative for damage, positive for healing),
-  "moneyChange": number,
-  "reputationChange": number,
-  "itemFound": "item name or null",
-  "combat": boolean
+  // Try to infer game mechanics from text
+  if (text.toLowerCase().includes("money") || text.toLowerCase().includes("cash") || text.toLowerCase().includes("$")) {
+    response.moneyChange = Math.floor(Math.random() * 100) + 20;
+  }
+  
+  if (text.toLowerCase().includes("fight") || text.toLowerCase().includes("attack") || text.toLowerCase().includes("combat")) {
+    response.combat = true;
+    response.healthChange = -Math.floor(Math.random() * 20) - 5;
+  }
+  
+  if (text.toLowerCase().includes("find") || text.toLowerCase().includes("discover")) {
+    const items = ["knife", "wallet", "phone", "keys", "badge", "map"];
+    response.itemFound = items[Math.floor(Math.random() * items.length)];
+  }
+  
+  return response;
 }
 
-Make it dark, gritty, and fit the crime city theme.`;
-}
-
-function getFallbackAdventureResponse(action) {
+// More creative fallback responses
+function getCreativeFallbackResponse(action) {
   const responses = [
     {
-      narrative: "You walk through the rain-slicked streets. The neon signs reflect off puddles as shadows move in alleys.",
+      narrative: "You walk through the rain-slicked streets. The neon signs reflect off puddles as shadows move in alleys. A distant siren wails.",
       location: "Downtown",
       quest: "Find the informant",
       healthChange: 0,
@@ -864,7 +776,7 @@ function getFallbackAdventureResponse(action) {
       combat: true
     },
     {
-      narrative: "You find an abandoned warehouse. Inside, a briefcase sits on a crate. It's unlocked...",
+      narrative: "You find an abandoned warehouse. Inside, a briefcase sits on a crate. It's unlocked and full of cash!",
       location: "Warehouse District",
       quest: "Check the briefcase",
       healthChange: 0,
@@ -872,154 +784,155 @@ function getFallbackAdventureResponse(action) {
       reputationChange: 2,
       itemFound: "Briefcase",
       combat: false
-    }
-  ];
-  
-  return responses[Math.floor(Math.random() * responses.length)];
-}
-
-function parseAdventureResponse(response) {
-  if (!response) {
-    return {
-      narrative: "Nothing happens. The city is quiet tonight.",
-      location: adventureState.context.location,
-      quest: adventureState.context.quest,
+    },
+    {
+      narrative: "The shady dealer eyes you suspiciously. 'You got the money?' he asks, hand in his pocket.",
+      location: "Underpass",
+      quest: "Complete the deal",
+      healthChange: 0,
+      moneyChange: -100,
+      reputationChange: 3,
+      itemFound: "Mystery Package",
+      combat: false
+    },
+    {
+      narrative: "The bank looks heavily guarded. Multiple cameras and armed security make this a risky move.",
+      location: "Financial District",
+      quest: "Case the joint",
       healthChange: 0,
       moneyChange: 0,
       reputationChange: 0,
       itemFound: null,
       combat: false
-    };
-  }
-  
-  return response;
-}
-
-async function updateGameFromAdventure(parsed) {
-  let updates = false;
-  
-  if (parsed.location && parsed.location !== adventureState.context.location) {
-    adventureState.context.location = parsed.location;
-    const locationEl = document.getElementById('adventure-location');
-    if (locationEl) locationEl.textContent = parsed.location;
-    updates = true;
-  }
-  
-  if (parsed.quest && parsed.quest !== adventureState.context.quest) {
-    adventureState.context.quest = parsed.quest;
-    const questEl = document.getElementById('adventure-quest');
-    if (questEl) questEl.textContent = parsed.quest;
-    updates = true;
-  }
-  
-  if (parsed.healthChange) {
-    adventureState.context.health = Math.max(0, Math.min(100, 
-      (adventureState.context.health || 100) + parsed.healthChange));
-    
-    if (parsed.healthChange < 0) {
-      addStoryEntry(`You take ${-parsed.healthChange} damage!`, "combat");
-    } else if (parsed.healthChange > 0) {
-      addStoryEntry(`You heal ${parsed.healthChange} health.`, "system");
+    },
+    {
+      narrative: "A police cruiser slowly passes by. The officer inside gives you a long, hard look.",
+      location: "Main Street",
+      quest: "Avoid attention",
+      healthChange: 0,
+      moneyChange: 0,
+      reputationChange: -2,
+      itemFound: null,
+      combat: false
+    },
+    {
+      narrative: "You find a locked door with a keypad. Looks like it leads to something valuable.",
+      location: "Back Alley",
+      quest: "Find the code",
+      healthChange: 0,
+      moneyChange: 0,
+      reputationChange: 0,
+      itemFound: null,
+      combat: false
+    },
+    {
+      narrative: "A mysterious figure in a trench coat approaches. 'Looking for work?' they whisper.",
+      location: "Train Station",
+      quest: "Take the job",
+      healthChange: 0,
+      moneyChange: 0,
+      reputationChange: 0,
+      itemFound: null,
+      combat: false
     }
-    updates = true;
-  }
+  ];
   
-  if (parsed.moneyChange) {
-    playerData.money = (playerData.money || 1000) + parsed.moneyChange;
-    updatePlayerDisplay();
-    
-    if (parsed.moneyChange > 0) {
-      addStoryEntry(`You found $${parsed.moneyChange}!`, "loot");
-    }
-    updates = true;
-  }
+  // Use action to influence response (simple keyword matching)
+  const actionLower = action.toLowerCase();
   
-  if (parsed.reputationChange) {
-    playerData.reputation = (playerData.reputation || 0) + parsed.reputationChange;
-    updatePlayerDisplay();
-    updates = true;
-  }
-  
-  if (parsed.itemFound) {
-    if (!playerData.inventory) playerData.inventory = [];
-    playerData.inventory.push({
-      name: parsed.itemFound,
-      foundAt: Timestamp.now()
-    });
-    addStoryEntry(`You found: ${parsed.itemFound}!`, "loot");
-    updates = true;
-  }
-  
-  if (parsed.combat) {
-    addStoryEntry("⚔️ Combat initiated!", "combat");
-  }
-  
-  if (updates && currentUser) {
-    try {
-      const playerRef = doc(db, "players", currentUser.uid);
-      await updateDoc(playerRef, {
-        money: playerData.money,
-        reputation: playerData.reputation,
-        inventory: playerData.inventory,
-        adventureContext: adventureState.context
-      });
-    } catch (error) {
-      console.error("Error saving adventure state:", error);
-    }
+  if (actionLower.includes("bank") || actionLower.includes("rob")) {
+    return responses[4]; // Bank response
+  } else if (actionLower.includes("dealer") || actionLower.includes("buy") || actionLower.includes("sell")) {
+    return responses[3]; // Dealer response
+  } else if (actionLower.includes("fight") || actionLower.includes("attack")) {
+    return responses[1]; // Fight response
+  } else if (actionLower.includes("warehouse") || actionLower.includes("explore")) {
+    return responses[2]; // Warehouse response
+  } else if (actionLower.includes("police") || actionLower.includes("cops")) {
+    return responses[5]; // Police response
+  } else {
+    // Return random response for other actions
+    return responses[Math.floor(Math.random() * responses.length)];
   }
 }
 
-async function saveAdventureState() {
-  if (!currentUser) return;
+// Update buildAdventureContext to be more specific
+function buildAdventureContext(action) {
+  const recentHistory = adventureState.history.slice(-3).map(h => 
+    `${h.type}: ${h.text}`
+  ).join('\n');
+  
+  return `You are the AI narrator for Groq City, a gritty crime-filled metropolis.
+
+Current game state:
+- Location: ${adventureState.context.location}
+- Active quest: ${adventureState.context.quest}
+- Health: ${adventureState.context.health}
+- Money: $${playerData.money}
+- Reputation: ${playerData.reputation}
+- Stats: Str ${playerData.stats.strength}, Agi ${playerData.stats.agility}, Int ${playerData.stats.intelligence}
+
+Recent events:
+${recentHistory}
+
+Player's new action: "${action}"
+
+Generate a UNIQUE response based on this specific action. Be creative! Don't repeat scenarios.
+Respond with ONLY valid JSON in this exact format:
+{
+  "narrative": "A vivid, immersive 2-3 sentence description of what happens",
+  "location": "New location (can be same or different)",
+  "quest": "New quest or current quest",
+  "healthChange": number between -30 and 30,
+  "moneyChange": number between -200 and 500,
+  "reputationChange": number between -10 and 20,
+  "itemFound": "item name or null",
+  "combat": true or false
+}
+
+Make it dark, gritty, and fit the crime city theme. The response should feel different for each action.`;
+}
+
+// Update queryGroq to handle responses better
+async function queryGroq(prompt, systemPrompt) {
+  if (!GROQ_API_KEY) {
+    console.log("No Groq API key provided");
+    return null;
+  }
   
   try {
-    const playerRef = doc(db, "players", currentUser.uid);
-    await updateDoc(playerRef, {
-      adventureHistory: adventureState.history,
-      adventureContext: adventureState.context
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'mixtral-8x7b-32768',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes. Always respond with valid JSON."
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.9, // Increase temperature for more variety
+        max_tokens: 500
+      })
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   } catch (error) {
-    console.error("Error saving adventure:", error);
-  }
-}
-
-// ==================== LEADERBOARD FUNCTIONS ====================
-
-function showLeaderboard() {
-  const q = query(
-    collection(db, "scores"),
-    orderBy("score", "desc"),
-    limit(10)
-  );
-  
-  onSnapshot(q, (snapshot) => {
-    const leaderboard = document.getElementById("scores-list");
-    if (!leaderboard) return;
-    
-    leaderboard.innerHTML = "";
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${data.name || "Anonymous"}</span> <span>$${data.score || 0}</span>`;
-      leaderboard.appendChild(li);
-    });
-  }, (error) => {
-    console.error("Leaderboard error:", error);
-  });
-}
-
-async function saveScore(name, score) {
-  if (!currentUser) return;
-  
-  try {
-    await addDoc(collection(db, "scores"), {
-      name: name || "Anonymous",
-      score: score || 0,
-      timestamp: Timestamp.now(),
-      userId: currentUser.uid
-    });
-  } catch (error) {
-    console.error("Error saving score:", error);
+    console.error('Groq API error:', error);
+    return null;
   }
 }
 
