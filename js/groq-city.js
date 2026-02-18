@@ -836,80 +836,82 @@ async function processAdventureActionWithStreaming(action) {
     alert("Please login to play the adventure!");
     return;
   }
-  
+
   adventureState.isProcessing = true;
+
   const submitBtn = document.getElementById('adventure-submit');
   const input = document.getElementById('adventure-input');
-  const originalText = submitBtn.textContent;
-  submitBtn.textContent = '🤔 Thinking...';
-  submitBtn.disabled = true;
-  input.disabled = true;
-  
+
+  const originalText = submitBtn?.textContent || "Submit";
+  if (submitBtn) {
+    submitBtn.textContent = '🤔 Thinking...';
+    submitBtn.disabled = true;
+  }
+  if (input) input.disabled = true;
+
   addStoryEntry(action, "player");
-  
+
   // Create a temporary entry for streaming
   const container = getStoryContainer();
   const streamingEntry = document.createElement('div');
   streamingEntry.className = 'story-entry story-ai streaming';
   streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> `;
-  container.appendChild(streamingEntry);
-  
+  if (container) container.appendChild(streamingEntry);
+
   let streamedContent = '';
-  
+
   try {
     const contextPrompt = buildAdventureContext(action);
-    
+
     const response = await queryGroqWithStreaming(
       contextPrompt,
-      `You are a text adventure game master for a gritty crime city called "Groq City". 
-       You MUST respond with ONLY valid JSON in this exact format, no other text:
-       {
-         "narrative": "A vivid, immersive description (2-3 sentences)",
-         "location": "New location or same", 
-         "quest": "New quest or same", 
-         "healthChange": 0,
-         "moneyChange": 0,
-         "reputationChange": 0,
-         "itemFound": null,
-         "combat": false
-       }
-       
-       Be creative! Generate different responses based on the player's action.`,
+      `You are a text adventure game master for a gritty crime city called "Groq City".
+You MUST respond with ONLY valid JSON in this exact format, no other text:
+{
+  "narrative": "A vivid, immersive description (2-3 sentences)",
+  "location": "New location or same",
+  "quest": "New quest or same",
+  "healthChange": 0,
+  "moneyChange": 0,
+  "reputationChange": 0,
+  "itemFound": null,
+  "combat": false
+}
+Be creative! Generate different responses based on the player's action.`,
       (chunk) => {
         streamedContent += chunk;
-        // Update the streaming entry in real-time
         streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(streamedContent)}`;
       }
     );
-    
+
     // Process the complete response
     if (response) {
       const aiResponse = extractFirstJsonObject(response);
 
       if (aiResponse) {
-        // Ensure all required fields exist
         const parsedResponse = {
-          narrative: aiResponse.narrative || streamedContent,
+          narrative: aiResponse.narrative || streamedContent || "The city streets stretch before you...",
           location: aiResponse.location || adventureState.context.location,
           quest: aiResponse.quest || adventureState.context.quest,
-          healthChange: aiResponse.healthChange || 0,
-          moneyChange: aiResponse.moneyChange || 0,
-          reputationChange: aiResponse.reputationChange || 0,
+          healthChange: Number(aiResponse.healthChange || 0),
+          moneyChange: Number(aiResponse.moneyChange || 0),
+          reputationChange: Number(aiResponse.reputationChange || 0),
           itemFound: aiResponse.itemFound || null,
-          combat: aiResponse.combat || false
+          combat: Boolean(aiResponse.combat || false)
         };
 
-        // Update the entry with the final parsed narrative
         streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(parsedResponse.narrative)}`;
 
         await updateGameFromAdventure(parsedResponse);
         await saveAdventureState();
       } else {
         // No valid JSON: fall back to streamed content
-        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(streamedContent || "The city streets stretch before you...")}`;
+        const fallbackNarrative = streamedContent || "The city streets stretch before you...";
+
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(fallbackNarrative)}`;
 
         const simpleResponse = {
-          narrative: streamedContent || "The city streets stretch before you...",
+          narrative: fallbackNarrative,
           location: adventureState.context.location,
           quest: adventureState.context.quest,
           healthChange: 0,
@@ -922,24 +924,30 @@ async function processAdventureActionWithStreaming(action) {
         await updateGameFromAdventure(simpleResponse);
         await saveAdventureState();
       }
+    } else {
+      // No response at all
+      streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> The city is quiet... try again.`;
     }
-      }
-    }
-    
+
   } catch (error) {
     console.error("Adventure error:", error);
     streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> The city's chaos makes it hard to think... Try again.`;
   } finally {
     adventureState.isProcessing = false;
-    submitBtn.textContent = originalText;
-    submitBtn.disabled = false;
-    input.disabled = false;
-    input.focus();
-    
-    // Remove streaming class
+
+    if (submitBtn) {
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+    }
+    if (input) {
+      input.disabled = false;
+      input.focus();
+    }
+
     streamingEntry.classList.remove('streaming');
   }
 }
+
 
 async function updateGameFromAdventure(result) {
   // Update player stats
