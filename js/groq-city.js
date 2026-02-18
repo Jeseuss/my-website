@@ -38,7 +38,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Initialize Groq (REPLACE WITH YOUR ACTUAL KEY)
-const GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE"; 
+const GROQ_API_KEY = "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"; 
 
 // Game State
 let currentUser = null;
