@@ -39,7 +39,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Initialize Groq with API key
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const groq = new Groq({
   apiKey: GROQ_API_KEY,
   dangerouslyAllowBrowser: true // Required for browser usage
