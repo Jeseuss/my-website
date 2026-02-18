@@ -11,8 +11,7 @@ import {
   doc,
   setDoc,
   getDoc,
-  updateDoc,
-  deleteDoc // Added for cleanup if needed
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { 
   getAuth, 
@@ -22,7 +21,7 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// Firebase Config (your existing config)
+// Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyDtKRlsPmdOMtzY_ESJFq3JiduLPPbz1QQ",
   authDomain: "dbfinal-9fadb.firebaseapp.com",
@@ -37,7 +36,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Initialize  (REPLACE WITH YOUR ACTUAL KEY)
+// Groq API Key - FIXED the reference
 const GROQ_API_KEY = "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"; 
 
 // Game State
@@ -59,6 +58,18 @@ let cityState = {
   economy: 50,
   policePresence: 50,
   description: "A new day dawns in Groq City..."
+};
+
+// Adventure State
+let adventureState = {
+  history: [],
+  context: {
+    location: "Groq City Streets",
+    quest: "None",
+    health: 100,
+    inventory: []
+  },
+  isProcessing: false
 };
 
 // Available actions
@@ -95,7 +106,8 @@ if (bgMusic) {
   });
 }
 
-// Authentication functions
+// ==================== AUTHENTICATION FUNCTIONS ====================
+
 async function login(email, password) {
   try {
     await signInWithEmailAndPassword(auth, email, password);
@@ -107,14 +119,12 @@ async function login(email, password) {
 async function signup(email, password) {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // Initialize player data immediately after signup
     await initializeNewPlayer(userCredential.user.uid);
   } catch (error) {
     alert("Signup failed: " + error.message);
   }
 }
 
-// Initialize new player in Firebase
 async function initializeNewPlayer(userId) {
   const playerRef = doc(db, "players", userId);
   const defaultPlayerData = {
@@ -125,6 +135,13 @@ async function initializeNewPlayer(userId) {
       strength: 10,
       agility: 10,
       intelligence: 10
+    },
+    adventureHistory: [],
+    adventureContext: {
+      location: "Groq City Streets",
+      quest: "None",
+      health: 100,
+      inventory: []
     },
     createdAt: Timestamp.now(),
     lastLogin: Timestamp.now()
@@ -141,7 +158,8 @@ async function logout() {
   }
 }
 
-// Update UI based on auth state
+// ==================== UI UPDATE FUNCTIONS ====================
+
 function updateUI(user) {
   const loginForm = document.getElementById('login-form');
   const userInfo = document.getElementById('user-info');
@@ -159,16 +177,12 @@ function updateUI(user) {
     }
     if (gameContainer) gameContainer.style.display = 'block';
     if (leaderboard) leaderboard.style.display = 'block';
-    if (difficulty) difficulty.style.display = 'none'; // Hide old difficulty
+    if (difficulty) difficulty.style.display = 'none';
     
-    // Load player data
     loadPlayerData();
-    
-    // Start music
     if (musicOn && bgMusic) bgMusic.play();
-    
-    // Initialize city with AI
     initializeCity();
+    initAdventureEngine(); // Initialize adventure engine
   } else {
     currentUser = null;
     if (loginForm) loginForm.style.display = 'block';
@@ -180,7 +194,22 @@ function updateUI(user) {
   }
 }
 
-// Load player data from Firebase
+function updatePlayerDisplay() {
+  const moneyEl = document.getElementById('player-money');
+  const repEl = document.getElementById('player-rep');
+  const strengthEl = document.getElementById('player-strength');
+  const agilityEl = document.getElementById('player-agility');
+  const intelligenceEl = document.getElementById('player-intelligence');
+  
+  if (moneyEl) moneyEl.textContent = playerData.money || 0;
+  if (repEl) repEl.textContent = playerData.reputation || 0;
+  if (strengthEl) strengthEl.textContent = playerData.stats?.strength || 10;
+  if (agilityEl) agilityEl.textContent = playerData.stats?.agility || 10;
+  if (intelligenceEl) intelligenceEl.textContent = playerData.stats?.intelligence || 10;
+}
+
+// ==================== LOAD PLAYER DATA ====================
+
 async function loadPlayerData() {
   if (!currentUser) return;
   
@@ -191,39 +220,45 @@ async function loadPlayerData() {
     if (playerSnap.exists()) {
       playerData = playerSnap.data();
       console.log("Player data loaded:", playerData);
+      
+      // Load adventure state
+      if (playerData.adventureHistory) {
+        adventureState.history = playerData.adventureHistory;
+        adventureState.context = playerData.adventureContext || adventureState.context;
+      }
     } else {
       console.log("No player data found, creating new player...");
       await initializeNewPlayer(currentUser.uid);
-      // Reload the data we just created
       const newPlayerSnap = await getDoc(playerRef);
       playerData = newPlayerSnap.data();
     }
     
     updatePlayerDisplay();
-    renderActions(); // Re-render actions with updated money
+    renderActions();
     renderMarket();
+    
+    // Update adventure display
+    setTimeout(() => {
+      displayAdventureHistory();
+      const locationEl = document.getElementById('adventure-location');
+      const questEl = document.getElementById('adventure-quest');
+      if (locationEl) locationEl.textContent = adventureState.context.location;
+      if (questEl) questEl.textContent = adventureState.context.quest;
+    }, 100);
+    
   } catch (error) {
     console.error("Error loading player data:", error);
     alert("Error loading game data. Please refresh.");
   }
 }
 
-// Update player display
-function updatePlayerDisplay() {
-  const moneyEl = document.getElementById('player-money');
-  const repEl = document.getElementById('player-rep');
-  
-  if (moneyEl) moneyEl.textContent = playerData.money || 0;
-  if (repEl) repEl.textContent = playerData.reputation || 0;
-}
+// ==================== CITY FUNCTIONS ====================
 
-// Initialize city with AI-generated description
 async function initializeCity() {
   showAIThinking();
   
   try {
-    // Only try AI if we have an API key
-    if (GROQ_API_KEY !== "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") {
+    if (GROQ_API_KEY) {
       const description = await getAICityDescription();
       if (description) {
         cityState.description = description;
@@ -231,36 +266,100 @@ async function initializeCity() {
         if (descEl) descEl.textContent = description;
       }
     } else {
-      // Fallback description
       const descEl = document.getElementById('city-description');
       if (descEl) {
         descEl.textContent = "Welcome to Groq City. The neon lights flicker as another day of opportunity begins...";
       }
     }
     
-    // Generate initial city stats
     updateCityStats();
     renderActions();
     renderMarket();
-    
-    // Start day cycle
     startDayCycle();
   } catch (error) {
     console.error("Error initializing city:", error);
-    const descEl = document.getElementById('city-description');
-    if (descEl) {
-      descEl.textContent = "Welcome to Groq City. The city lives and breathes around you...";
-    }
   } finally {
     hideAIThinking();
   }
 }
 
-// AI Integration Functions (with fallbacks)
-async function queryGroq(prompt) {
-  // Skip if no API key
-  if (GROQ_API_KEY === "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") {
-    console.log("No Groq API key provided, using fallback responses");
+function updateCityStats() {
+  const statsContainer = document.getElementById('city-stats');
+  if (!statsContainer) return;
+  
+  statsContainer.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value">${cityState.crimeRate}%</div>
+      <div class="stat-label">Crime Rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${cityState.economy}%</div>
+      <div class="stat-label">Economy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${cityState.policePresence}%</div>
+      <div class="stat-label">Police Presence</div>
+    </div>
+  `;
+  
+  const dayEl = document.getElementById('game-day');
+  if (dayEl) dayEl.textContent = cityState.day;
+}
+
+async function generateCityEvent() {
+  cityState.crimeRate += Math.floor(Math.random() * 10) - 5;
+  cityState.economy += Math.floor(Math.random() * 8) - 4;
+  cityState.policePresence += Math.floor(Math.random() * 12) - 6;
+  
+  cityState.crimeRate = Math.min(100, Math.max(0, cityState.crimeRate));
+  cityState.economy = Math.min(100, Math.max(0, cityState.economy));
+  cityState.policePresence = Math.min(100, Math.max(0, cityState.policePresence));
+  
+  updateCityStats();
+  
+  const events = [
+    "Police crackdown in the east end!",
+    "New gang emerges in the industrial district.",
+    "Stock market crashes! Economy in turmoil.",
+    "Mayor announces anti-crime initiative.",
+    "Rival mob bosses call a truce.",
+    "Casino heist shocks the city!",
+    "Underground fight club gains popularity.",
+    "Drug prices skyrocket on the black market."
+  ];
+  
+  const news = events[Math.floor(Math.random() * events.length)];
+  addNewsItem(news);
+}
+
+function addNewsItem(news) {
+  const feed = document.getElementById('news-feed');
+  if (!feed) return;
+  
+  const item = document.createElement('div');
+  item.className = 'news-item';
+  item.textContent = `📰 ${news}`;
+  feed.insertBefore(item, feed.firstChild);
+  
+  while (feed.children.length > 10) {
+    feed.removeChild(feed.lastChild);
+  }
+}
+
+function startDayCycle() {
+  setInterval(async () => {
+    if (currentUser) {
+      cityState.day++;
+      await generateCityEvent();
+    }
+  }, 60000);
+}
+
+// ==================== AI FUNCTIONS ====================
+
+async function queryGroq(prompt, systemPrompt = "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes.") {
+  if (!GROQ_API_KEY) {
+    console.log("No Groq API key provided");
     return null;
   }
   
@@ -268,7 +367,7 @@ async function queryGroq(prompt) {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${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}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -276,7 +375,7 @@ async function queryGroq(prompt) {
         messages: [
           {
             role: 'system',
-            content: 'You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes.'
+            content: systemPrompt
           },
           {
             role: 'user',
@@ -284,7 +383,7 @@ async function queryGroq(prompt) {
           }
         ],
         temperature: 0.9,
-        max_tokens: 200
+        max_tokens: 500
       })
     });
 
@@ -302,7 +401,6 @@ async function queryGroq(prompt) {
 
 async function getAICityDescription() {
   const prompt = `Generate a gritty, immersive description of a crime-ridden city called "Groq City" for the start of a new day. Include details about the atmosphere, the streets, and the general mood. Make it dark and exciting. Keep it under 100 words.`;
-  
   const response = await queryGroq(prompt);
   return response || "The neon lights flicker over wet pavement as Groq City wakes to another day of crime and opportunity...";
 }
@@ -322,7 +420,8 @@ async function getAIActionOutcome(action, playerStats, cityState, success) {
   }
 }
 
-// Show/hide AI thinking indicator
+// ==================== UI CONTROLS ====================
+
 function showAIThinking() {
   const indicator = document.getElementById('ai-thinking');
   if (indicator) indicator.style.display = 'block';
@@ -333,7 +432,8 @@ function hideAIThinking() {
   if (indicator) indicator.style.display = 'none';
 }
 
-// Render action buttons
+// ==================== ACTION FUNCTIONS ====================
+
 function renderActions() {
   const container = document.getElementById('player-actions');
   if (!container) return;
@@ -354,7 +454,6 @@ function renderActions() {
   });
 }
 
-// Render market
 function renderMarket() {
   const container = document.getElementById('market');
   if (!container) return;
@@ -382,11 +481,9 @@ function renderMarket() {
   });
 }
 
-// Perform action with AI flavor
 async function performAction(action) {
   if (!currentUser) return;
   
-  // Check if player has enough money
   if (action.cost > (playerData.money || 0)) {
     alert(`You need $${action.cost} to do that!`);
     return;
@@ -395,7 +492,6 @@ async function performAction(action) {
   showAIThinking();
   
   try {
-    // Calculate success based on stats and city state
     let successChance = action.baseSuccess;
     if (action.type === 'crime') {
       successChance += (playerData.stats?.agility || 10) * 2;
@@ -408,10 +504,8 @@ async function performAction(action) {
     successChance = Math.min(95, Math.max(5, successChance));
     const success = Math.random() * 100 < successChance;
     
-    // Get AI-generated outcome description (or use fallback)
     const aiDescription = await getAIActionOutcome(action, playerData.stats, cityState, success);
     
-    // Calculate rewards
     let reward = 0;
     if (success) {
       reward = Math.floor(Math.random() * 200) + 50;
@@ -421,7 +515,6 @@ async function performAction(action) {
       playerData.reputation = (playerData.reputation || 0) - 2;
     }
     
-    // Handle training action
     if (action.id === 'train' && success) {
       playerData.money = (playerData.money || 0) - action.cost;
       const stat = ['strength', 'agility', 'intelligence'][Math.floor(Math.random() * 3)];
@@ -429,7 +522,6 @@ async function performAction(action) {
       playerData.stats[stat] = (playerData.stats[stat] || 10) + 1;
     }
     
-    // Save to Firebase
     try {
       const playerRef = doc(db, "players", currentUser.uid);
       await updateDoc(playerRef, {
@@ -438,23 +530,17 @@ async function performAction(action) {
         stats: playerData.stats,
         lastAction: Timestamp.now()
       });
-      console.log("Player data saved successfully");
     } catch (saveError) {
       console.error("Error saving to Firebase:", saveError);
-      // If update fails, try to set the document
       const playerRef = doc(db, "players", currentUser.uid);
       await setDoc(playerRef, playerData, { merge: true });
     }
     
-    // Log the action
     addToCrimeLog(aiDescription, success, reward);
-    
-    // Update display
     updatePlayerDisplay();
     renderActions();
-    renderMarket(); // Re-render market to update button states
+    renderMarket();
     
-    // Small chance for city event
     if (Math.random() < 0.3) {
       await generateCityEvent();
     }
@@ -467,7 +553,6 @@ async function performAction(action) {
   }
 }
 
-// Add to crime log
 function addToCrimeLog(description, success, reward = 0) {
   const log = document.getElementById('crime-log');
   if (!log) return;
@@ -483,93 +568,13 @@ function addToCrimeLog(description, success, reward = 0) {
   entry.textContent = `[Day ${cityState.day}] ${text}`;
   log.insertBefore(entry, log.firstChild);
   
-  // Keep only last 20 entries
   while (log.children.length > 20) {
     log.removeChild(log.lastChild);
   }
 }
 
-// Generate city event
-async function generateCityEvent() {
-  // Randomly adjust city stats
-  cityState.crimeRate += Math.floor(Math.random() * 10) - 5;
-  cityState.economy += Math.floor(Math.random() * 8) - 4;
-  cityState.policePresence += Math.floor(Math.random() * 12) - 6;
-  
-  // Clamp values
-  cityState.crimeRate = Math.min(100, Math.max(0, cityState.crimeRate));
-  cityState.economy = Math.min(100, Math.max(0, cityState.economy));
-  cityState.policePresence = Math.min(100, Math.max(0, cityState.policePresence));
-  
-  updateCityStats();
-  
-  // Generate news
-  const events = [
-    "Police crackdown in the east end!",
-    "New gang emerges in the industrial district.",
-    "Stock market crashes! Economy in turmoil.",
-    "Mayor announces anti-crime initiative.",
-    "Rival mob bosses call a truce.",
-    "Casino heist shocks the city!",
-    "Underground fight club gains popularity.",
-    "Drug prices skyrocket on the black market."
-  ];
-  
-  const news = events[Math.floor(Math.random() * events.length)];
-  addNewsItem(news);
-}
+// ==================== MARKET FUNCTIONS ====================
 
-// Update city stats display
-function updateCityStats() {
-  const statsContainer = document.getElementById('city-stats');
-  if (!statsContainer) return;
-  
-  statsContainer.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-value">${cityState.crimeRate}%</div>
-      <div class="stat-label">Crime Rate</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${cityState.economy}%</div>
-      <div class="stat-label">Economy</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${cityState.policePresence}%</div>
-      <div class="stat-label">Police Presence</div>
-    </div>
-  `;
-  
-  const dayEl = document.getElementById('game-day');
-  if (dayEl) dayEl.textContent = cityState.day;
-}
-
-// Add news item
-function addNewsItem(news) {
-  const feed = document.getElementById('news-feed');
-  if (!feed) return;
-  
-  const item = document.createElement('div');
-  item.className = 'news-item';
-  item.textContent = `📰 ${news}`;
-  feed.insertBefore(item, feed.firstChild);
-  
-  // Keep only last 10 news items
-  while (feed.children.length > 10) {
-    feed.removeChild(feed.lastChild);
-  }
-}
-
-// Day cycle
-function startDayCycle() {
-  setInterval(async () => {
-    if (currentUser) {
-      cityState.day++;
-      await generateCityEvent();
-    }
-  }, 60000); // New day every minute
-}
-
-// Buy item
 window.buyItem = async (itemId) => {
   if (!currentUser) {
     alert("Please login first!");
@@ -586,15 +591,12 @@ window.buyItem = async (itemId) => {
   
   playerData.money -= item.price;
   
-  // Initialize stats if needed
   if (!playerData.stats) {
     playerData.stats = { strength: 10, agility: 10, intelligence: 10 };
   }
   
-  // Add stat bonus
   playerData.stats[item.stat] = (playerData.stats[item.stat] || 10) + item.bonus;
   
-  // Add to inventory
   if (!playerData.inventory) playerData.inventory = [];
   playerData.inventory.push({
     id: item.id,
@@ -603,7 +605,6 @@ window.buyItem = async (itemId) => {
   });
   
   try {
-    // Save to Firebase
     const playerRef = doc(db, "players", currentUser.uid);
     await updateDoc(playerRef, {
       money: playerData.money,
@@ -611,7 +612,6 @@ window.buyItem = async (itemId) => {
       inventory: playerData.inventory
     });
     
-    // Update display
     updatePlayerDisplay();
     renderMarket();
     renderActions();
@@ -620,14 +620,371 @@ window.buyItem = async (itemId) => {
   } catch (error) {
     console.error("Error buying item:", error);
     alert("Purchase failed. Please try again.");
-    // Revert changes
     playerData.money += item.price;
     playerData.stats[item.stat] -= item.bonus;
     playerData.inventory.pop();
   }
 };
 
-// Leaderboard
+// ==================== ADVENTURE ENGINE ====================
+
+function initAdventureEngine() {
+  const input = document.getElementById('adventure-input');
+  const submitBtn = document.getElementById('adventure-submit');
+  const clearBtn = document.getElementById('adventure-clear');
+  
+  if (!input || !submitBtn || !clearBtn) return;
+  
+  // Only add welcome message if history is empty
+  if (adventureState.history.length === 0) {
+    addStoryEntry("⚔️ Your adventure begins in Groq City. The neon lights flicker overhead as you step into the shadows...", "system");
+  } else {
+    displayAdventureHistory();
+  }
+  
+  submitBtn.addEventListener('click', async () => {
+    const action = input.value.trim();
+    if (!action || adventureState.isProcessing) return;
+    
+    input.value = '';
+    await processAdventureAction(action);
+  });
+  
+  input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !adventureState.isProcessing) {
+      submitBtn.click();
+    }
+  });
+  
+  clearBtn.addEventListener('click', () => {
+    if (confirm('Start a new adventure? Your current story will be saved.')) {
+      adventureState.history = [];
+      adventureState.context = {
+        location: "Groq City Streets",
+        quest: "None",
+        health: 100,
+        inventory: []
+      };
+      const storyLog = document.getElementById('story-log');
+      if (storyLog) storyLog.innerHTML = '';
+      addStoryEntry("⚔️ You start a new adventure in Groq City...", "system");
+      saveAdventureState();
+    }
+  });
+}
+
+function addStoryEntry(text, type = "player") {
+  const storyLog = document.getElementById('story-log');
+  if (!storyLog) return;
+  
+  const entry = document.createElement('div');
+  entry.className = 'story-entry';
+  
+  let prefix = "👤";
+  let color = "#4ecdc4";
+  
+  switch(type) {
+    case "system":
+      prefix = "⚙️";
+      color = "#ffe66d";
+      break;
+    case "ai":
+      prefix = "🤖";
+      color = "#ff6b6b";
+      break;
+    case "combat":
+      prefix = "⚔️";
+      color = "#ff0000";
+      break;
+    case "loot":
+      prefix = "💰";
+      color = "#ffd700";
+      break;
+    default:
+      prefix = "👤";
+      color = "#4ecdc4";
+  }
+  
+  entry.innerHTML = `<span style="color: ${color};">${prefix}</span> ${text}`;
+  entry.style.marginBottom = '10px';
+  entry.style.padding = '5px';
+  entry.style.borderLeft = `3px solid ${color}`;
+  entry.style.paddingLeft = '10px';
+  entry.style.animation = 'fadeIn 0.3s ease';
+  
+  storyLog.appendChild(entry);
+  storyLog.scrollTop = storyLog.scrollHeight;
+  
+  adventureState.history.push({
+    text,
+    type,
+    timestamp: new Date().toISOString()
+  });
+  
+  if (adventureState.history.length > 100) {
+    adventureState.history.shift();
+  }
+}
+
+function displayAdventureHistory() {
+  const storyLog = document.getElementById('story-log');
+  if (!storyLog) return;
+  
+  storyLog.innerHTML = '';
+  adventureState.history.forEach(entry => {
+    const prefix = entry.type === "player" ? "👤" : 
+                   entry.type === "system" ? "⚙️" :
+                   entry.type === "combat" ? "⚔️" :
+                   entry.type === "loot" ? "💰" : "🤖";
+    const color = entry.type === "player" ? "#4ecdc4" :
+                  entry.type === "system" ? "#ffe66d" :
+                  entry.type === "combat" ? "#ff0000" :
+                  entry.type === "loot" ? "#ffd700" : "#ff6b6b";
+    
+    const div = document.createElement('div');
+    div.className = 'story-entry';
+    div.innerHTML = `<span style="color: ${color};">${prefix}</span> ${entry.text}`;
+    div.style.marginBottom = '10px';
+    div.style.padding = '5px';
+    div.style.borderLeft = `3px solid ${color}`;
+    div.style.paddingLeft = '10px';
+    storyLog.appendChild(div);
+  });
+  storyLog.scrollTop = storyLog.scrollHeight;
+}
+
+async function processAdventureAction(action) {
+  if (!currentUser) {
+    alert("Please login to play the adventure!");
+    return;
+  }
+  
+  adventureState.isProcessing = true;
+  const submitBtn = document.getElementById('adventure-submit');
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = '🤔 Thinking...';
+  submitBtn.disabled = true;
+  
+  addStoryEntry(action, "player");
+  
+  try {
+    let aiResponse;
+    
+    if (GROQ_API_KEY) {
+      const contextPrompt = buildAdventureContext(action);
+      const response = await queryGroq(contextPrompt, "You are a text adventure game master for a gritty crime city. Generate immersive responses in JSON format.");
+      
+      if (response) {
+        try {
+          // Try to parse JSON from response
+          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            aiResponse = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("No JSON found");
+          }
+        } catch (e) {
+          console.error("Failed to parse AI response:", e);
+          aiResponse = getFallbackAdventureResponse(action);
+        }
+      } else {
+        aiResponse = getFallbackAdventureResponse(action);
+      }
+    } else {
+      aiResponse = getFallbackAdventureResponse(action);
+    }
+    
+    const parsedResponse = parseAdventureResponse(aiResponse);
+    addStoryEntry(parsedResponse.narrative, "ai");
+    await updateGameFromAdventure(parsedResponse);
+    await saveAdventureState();
+    
+  } catch (error) {
+    console.error("Adventure error:", error);
+    addStoryEntry("The city's chaos makes it hard to think... Try again.", "system");
+  } finally {
+    adventureState.isProcessing = false;
+    submitBtn.textContent = originalText;
+    submitBtn.disabled = false;
+  }
+}
+
+function buildAdventureContext(action) {
+  const recentHistory = adventureState.history.slice(-5).map(h => 
+    `${h.type === 'player' ? 'Player' : 'Game'}: ${h.text}`
+  ).join('\n');
+  
+  return `You are the AI narrator for a gritty crime city adventure game called "Groq City". 
+The player is currently in: ${adventureState.context.location}
+Current quest: ${adventureState.context.quest}
+Player health: ${adventureState.context.health}
+Player inventory: ${adventureState.context.inventory.join(', ') || 'empty'}
+Player stats: Str ${playerData.stats.strength}, Agi ${playerData.stats.agility}, Int ${playerData.stats.intelligence}
+
+Recent events:
+${recentHistory}
+
+The player action: "${action}"
+
+Generate a response in this exact JSON format:
+{
+  "narrative": "A vivid, immersive description of what happens (2-3 sentences)",
+  "location": "New location if changed",
+  "quest": "New quest if given/completed",
+  "healthChange": number (negative for damage, positive for healing),
+  "moneyChange": number,
+  "reputationChange": number,
+  "itemFound": "item name or null",
+  "combat": boolean
+}
+
+Make it dark, gritty, and fit the crime city theme.`;
+}
+
+function getFallbackAdventureResponse(action) {
+  const responses = [
+    {
+      narrative: "You walk through the rain-slicked streets. The neon signs reflect off puddles as shadows move in alleys.",
+      location: "Downtown",
+      quest: "Find the informant",
+      healthChange: 0,
+      moneyChange: 0,
+      reputationChange: 1,
+      itemFound: null,
+      combat: false
+    },
+    {
+      narrative: "A group of thugs blocks your path. 'This is our turf,' one growls. They look ready for a fight.",
+      location: "Industrial District",
+      quest: "Deal with the thugs",
+      healthChange: -10,
+      moneyChange: 0,
+      reputationChange: 5,
+      itemFound: null,
+      combat: true
+    },
+    {
+      narrative: "You find an abandoned warehouse. Inside, a briefcase sits on a crate. It's unlocked...",
+      location: "Warehouse District",
+      quest: "Check the briefcase",
+      healthChange: 0,
+      moneyChange: 500,
+      reputationChange: 2,
+      itemFound: "Briefcase",
+      combat: false
+    }
+  ];
+  
+  return responses[Math.floor(Math.random() * responses.length)];
+}
+
+function parseAdventureResponse(response) {
+  if (!response) {
+    return {
+      narrative: "Nothing happens. The city is quiet tonight.",
+      location: adventureState.context.location,
+      quest: adventureState.context.quest,
+      healthChange: 0,
+      moneyChange: 0,
+      reputationChange: 0,
+      itemFound: null,
+      combat: false
+    };
+  }
+  
+  return response;
+}
+
+async function updateGameFromAdventure(parsed) {
+  let updates = false;
+  
+  if (parsed.location && parsed.location !== adventureState.context.location) {
+    adventureState.context.location = parsed.location;
+    const locationEl = document.getElementById('adventure-location');
+    if (locationEl) locationEl.textContent = parsed.location;
+    updates = true;
+  }
+  
+  if (parsed.quest && parsed.quest !== adventureState.context.quest) {
+    adventureState.context.quest = parsed.quest;
+    const questEl = document.getElementById('adventure-quest');
+    if (questEl) questEl.textContent = parsed.quest;
+    updates = true;
+  }
+  
+  if (parsed.healthChange) {
+    adventureState.context.health = Math.max(0, Math.min(100, 
+      (adventureState.context.health || 100) + parsed.healthChange));
+    
+    if (parsed.healthChange < 0) {
+      addStoryEntry(`You take ${-parsed.healthChange} damage!`, "combat");
+    } else if (parsed.healthChange > 0) {
+      addStoryEntry(`You heal ${parsed.healthChange} health.`, "system");
+    }
+    updates = true;
+  }
+  
+  if (parsed.moneyChange) {
+    playerData.money = (playerData.money || 1000) + parsed.moneyChange;
+    updatePlayerDisplay();
+    
+    if (parsed.moneyChange > 0) {
+      addStoryEntry(`You found $${parsed.moneyChange}!`, "loot");
+    }
+    updates = true;
+  }
+  
+  if (parsed.reputationChange) {
+    playerData.reputation = (playerData.reputation || 0) + parsed.reputationChange;
+    updatePlayerDisplay();
+    updates = true;
+  }
+  
+  if (parsed.itemFound) {
+    if (!playerData.inventory) playerData.inventory = [];
+    playerData.inventory.push({
+      name: parsed.itemFound,
+      foundAt: Timestamp.now()
+    });
+    addStoryEntry(`You found: ${parsed.itemFound}!`, "loot");
+    updates = true;
+  }
+  
+  if (parsed.combat) {
+    addStoryEntry("⚔️ Combat initiated!", "combat");
+  }
+  
+  if (updates && currentUser) {
+    try {
+      const playerRef = doc(db, "players", currentUser.uid);
+      await updateDoc(playerRef, {
+        money: playerData.money,
+        reputation: playerData.reputation,
+        inventory: playerData.inventory,
+        adventureContext: adventureState.context
+      });
+    } catch (error) {
+      console.error("Error saving adventure state:", error);
+    }
+  }
+}
+
+async function saveAdventureState() {
+  if (!currentUser) return;
+  
+  try {
+    const playerRef = doc(db, "players", currentUser.uid);
+    await updateDoc(playerRef, {
+      adventureHistory: adventureState.history,
+      adventureContext: adventureState.context
+    });
+  } catch (error) {
+    console.error("Error saving adventure:", error);
+  }
+}
+
+// ==================== LEADERBOARD FUNCTIONS ====================
+
 function showLeaderboard() {
   const q = query(
     collection(db, "scores"),
@@ -651,7 +1008,6 @@ function showLeaderboard() {
   });
 }
 
-// Save score to leaderboard (keeping original function)
 async function saveScore(name, score) {
   if (!currentUser) return;
   
@@ -667,7 +1023,8 @@ async function saveScore(name, score) {
   }
 }
 
-// Event listeners
+// ==================== EVENT LISTENERS ====================
+
 document.getElementById('login-btn')?.addEventListener('click', () => {
   const email = document.getElementById('email')?.value;
   const password = document.getElementById('password')?.value;
@@ -698,7 +1055,7 @@ onAuthStateChanged(auth, (user) => {
 // Initialize leaderboard
 showLeaderboard();
 
-// Make buyItem globally available
+// Make functions globally available
 window.buyItem = buyItem;
 
-console.log("Groq City game initialized!");
+console.log("Groq City game initialized with Adventure Engine!");
