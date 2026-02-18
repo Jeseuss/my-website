@@ -270,20 +270,15 @@
     <div id="city-stats"></div>
     
     <!-- Player Stats -->
-<div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; flex-wrap: wrap; gap: 15px;">
-  <div>
-    <span style="color: var(--wealth);">💰 Money: $<span id="player-money">1000</span></span>
-    <span style="margin-left: 20px; color: var(--accent);">⭐ Reputation: <span id="player-rep">0</span></span>
-  </div>
-  <div style="display: flex; gap: 20px;">
-    <span style="color: #ff6b6b;">💪 Str: <span id="player-strength">10</span></span>
-    <span style="color: #4ecdc4;">⚡ Agi: <span id="player-agility">10</span></span>
-    <span style="color: #ffe66d;">🧠 Int: <span id="player-intelligence">10</span></span>
-  </div>
-  <div>
-    <span style="color: var(--success);">⏱️ Day <span id="game-day">1</span></span>
-  </div>
-</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0;">
+      <div>
+        <span style="color: var(--wealth);">💰 Money: $<span id="player-money">1000</span></span>
+        <span style="margin-left: 20px; color: var(--accent);">⭐ Reputation: <span id="player-rep">0</span></span>
+      </div>
+      <div>
+        <span style="color: var(--success);">⏱️ Time: Day <span id="game-day">1</span></span>
+      </div>
+    </div>
     
     <!-- Player Actions -->
     <div id="player-actions"></div>
@@ -291,33 +286,6 @@
     <!-- Crime Log -->
     <h3>📜 Crime Log</h3>
     <div id="crime-log"></div>
-
-    <!-- Adventure Engine Section -->
-<div style="margin: 40px 0; border-top: 2px solid rgba(255,255,255,0.1); padding-top: 30px;">
-  <h2>📖 Single-Player Adventure</h2>
-  <p style="opacity: 0.7; margin-bottom: 20px;">Type your actions and let AI shape your story...</p>
-  
-  <!-- Story Log - Scrollable -->
-  <div id="story-log" style="background: rgba(0, 0, 0, 0.5); border-radius: 10px; padding: 20px; height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; border: 1px solid var(--accent); margin-bottom: 20px;">
-    <div class="story-entry" style="color: var(--accent); margin-bottom: 10px;">
-      ⚔️ Your adventure begins in Groq City...
-    </div>
-  </div>
-  
-  <!-- Input Area -->
-  <div style="display: flex; gap: 10px;">
-    <input type="text" id="adventure-input" placeholder="What do you do? (e.g., 'Investigate the abandoned warehouse', 'Talk to the shady dealer', 'Look for work')" 
-           style="flex: 1; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); border-radius: 8px; color: white; font-size: 1rem;">
-    <button id="adventure-submit" class="action-btn" style="padding: 15px 30px;">▶️ Go</button>
-    <button id="adventure-clear" class="action-btn" style="background: var(--danger); padding: 15px 30px;">🗑️ Clear</button>
-  </div>
-  
-  <!-- Context Status -->
-  <div style="margin-top: 15px; display: flex; gap: 15px; font-size: 0.9rem; opacity: 0.7;">
-    <span>📍 Location: <span id="adventure-location">Groq City Streets</span></span>
-    <span>🎯 Quest: <span id="adventure-quest">None</span></span>
-  </div>
-</div>
     
     <!-- Black Market -->
     <h3>🏪 Black Market</h3>
