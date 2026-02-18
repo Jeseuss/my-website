@@ -86,7 +86,7 @@ onAuthStateChanged(auth, updateUI);
 // -------------------- Groq Text Adventure --------------------
 // API key handling – you can hardcode your key or let the user input it.
 // We'll store it in localStorage if the user saves it.
-const API_KEY_STORAGE = 'groq_api_key';
+const API_KEY_STORAGE = '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';
 let GROQ_API_KEY = localStorage.getItem(API_KEY_STORAGE) || '';
 
 const apiKeyInput = document.getElementById('api-key');
