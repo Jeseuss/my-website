@@ -270,15 +270,20 @@
     <div id="city-stats"></div>
     
     <!-- Player Stats -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0;">
-      <div>
-        <span style="color: var(--wealth);">💰 Money: $<span id="player-money">1000</span></span>
-        <span style="margin-left: 20px; color: var(--accent);">⭐ Reputation: <span id="player-rep">0</span></span>
-      </div>
-      <div>
-        <span style="color: var(--success);">⏱️ Time: Day <span id="game-day">1</span></span>
-      </div>
-    </div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; flex-wrap: wrap; gap: 15px;">
+  <div>
+    <span style="color: var(--wealth);">💰 Money: $<span id="player-money">1000</span></span>
+    <span style="margin-left: 20px; color: var(--accent);">⭐ Reputation: <span id="player-rep">0</span></span>
+  </div>
+  <div style="display: flex; gap: 20px;">
+    <span style="color: #ff6b6b;">💪 Str: <span id="player-strength">10</span></span>
+    <span style="color: #4ecdc4;">⚡ Agi: <span id="player-agility">10</span></span>
+    <span style="color: #ffe66d;">🧠 Int: <span id="player-intelligence">10</span></span>
+  </div>
+  <div>
+    <span style="color: var(--success);">⏱️ Day <span id="game-day">1</span></span>
+  </div>
+</div>
 
     <!-- Adventure Engine Section -->
 <div style="margin: 40px 0; border-top: 2px solid rgba(255,255,255,0.1); padding-top: 30px;">
