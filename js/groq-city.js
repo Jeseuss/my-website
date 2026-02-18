@@ -37,7 +37,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Groq API Key - FIXED the reference
-const GROQ_API_KEY = "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"; 
+const GROQ_API_KEY = "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"; 
 
 // Game State
 let currentUser = null;
