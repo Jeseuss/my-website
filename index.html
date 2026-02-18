@@ -2,7 +2,7 @@
 <html class="no-js" lang="">
 <head>
   <meta charset="UTF-8">
-  <title>Speed Catch</title>
+  <title>Text Adventure · Speed Catch Reborn</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="css/normalize.css">
   <link rel="stylesheet" href="css/main.css">
@@ -43,70 +43,92 @@
       text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
     }
     
-    #difficulty {
-      margin: 20px 0;
+    /* Adventure game UI */
+    #adventure-output {
+      background: #1e1e2f;
+      color: #f0e6d0;
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+      border-radius: 10px;
+      min-height: 300px;
+      max-height: 400px;
+      overflow-y: auto;
+      text-align: left;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #444;
+      margin-bottom: 20px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    
+    #input-area {
       display: flex;
-      justify-content: center;
-      align-items: center;
       gap: 10px;
+      margin-bottom: 15px;
     }
     
-    #difficulty label {
-      font-weight: bold;
-      color: var(--secondary);
-    }
-    
-    #difficultySelect {
-      padding: 8px 15px;
-      border-radius: 8px;
+    #user-input {
+      flex: 1;
+      padding: 12px;
       border: 2px solid var(--accent);
+      border-radius: 8px;
+      font-size: 1rem;
       background: white;
+    }
+    
+    #send-btn, #new-game-btn {
+      padding: 12px 25px;
+      border: none;
+      border-radius: 8px;
       font-size: 1rem;
       cursor: pointer;
       transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
-    #difficultySelect:hover {
-      border-color: var(--primary);
-    }
-    
-    #startButton {
+    #send-btn {
       background: var(--primary);
       color: white;
-      border: none;
-      padding: 12px 25px;
-      font-size: 1.1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      margin: 15px 0;
     }
     
-    #startButton:hover {
+    #send-btn:hover {
       background: var(--secondary);
       transform: translateY(-2px);
-      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
     }
     
-    #startButton:active {
-      transform: translateY(0);
+    #new-game-btn {
+      background: var(--accent);
+      color: white;
     }
     
-    #gameCanvas {
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-      display: block;
-      margin: 0 auto;
-      border: 1px solid #e0e0e0;
+    #new-game-btn:hover {
+      background: var(--secondary);
+      transform: translateY(-2px);
     }
     
-    #score {
-      font-size: 1.2rem;
+    /* API key input (optional) */
+    #api-key-container {
+      display: flex;
+      gap: 10px;
       margin: 15px 0;
-      font-weight: bold;
-      color: var(--secondary);
+      align-items: center;
+    }
+    
+    #api-key {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-family: monospace;
+    }
+    
+    #save-key-btn {
+      padding: 8px 15px;
+      background: var(--success);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
     }
     
     #leaderboard {
@@ -143,29 +165,26 @@
     #scores-list li:nth-child(odd) {
       background: rgba(67, 97, 238, 0.05);
     }
-
+    
     #musicToggle {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--primary);
-    color: white;
-    border: none;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    z-index: 100;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 100;
+      transition: all 0.3s ease;
     }
-
-    #musicToggle {
-    transition: all 0.3s ease;
-    }
-
+    
     #musicToggle:hover {
       transform: scale(1.1);
     }
@@ -174,68 +193,69 @@
       #game-container {
         padding: 20px;
       }
-      
-      #gameCanvas {
-        width: 100%;
-        height: auto;
+      #input-area {
+        flex-direction: column;
       }
     }
   </style>
 </head>
 
 <body>
-  <body>
-    <!-- Add this login section at the top -->
-    <div id="auth-container" style="max-width: 400px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-      <h2 style="color: var(--primary); text-align: center;">Login</h2>
-      <div id="login-form">
-        <input type="email" id="email" placeholder="Email" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-        <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-        <button id="login-btn" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer;">Login</button>
-        <button id="signup-btn" style="width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">Sign Up</button>
-      </div>
-      <div id="user-info" style="display: none; text-align: center;">
-        <p>Logged in as: <span id="user-email"></span></p>
-        <button id="logout-btn" style="padding: 8px 15px; background: var(--danger); color: white; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
-      </div>
+  <!-- Login / Auth section -->
+  <div id="auth-container" style="max-width: 400px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+    <h2 style="color: var(--primary); text-align: center;">Login</h2>
+    <div id="login-form">
+      <input type="email" id="email" placeholder="Email" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+      <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+      <button id="login-btn" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer;">Login</button>
+      <button id="signup-btn" style="width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">Sign Up</button>
     </div>
-
-  <div id="difficulty">
-    <label>Difficulty: </label>
-    <select id="difficultySelect">
-      <option value="easy">Easy</option>
-      <option value="medium" selected>Medium</option>
-      <option value="hard">Hard</option>
-    </select>
+    <div id="user-info" style="display: none; text-align: center;">
+      <p>Logged in as: <span id="user-email"></span></p>
+      <button id="logout-btn" style="padding: 8px 15px; background: var(--danger); color: white; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
+    </div>
   </div>
 
-  <!-- Game UI -->
+  <!-- Game Container (visible only when logged in) -->
   <div id="game-container">
-    <h1>Speed Catch</h1>
-    <button id="startButton">Start Game</button>
-    <canvas id="gameCanvas" width="600" height="400"></canvas>
-    <div id="score">Attempts: 3</div>
+    <h1>Text Adventure</h1>
+    
+    <!-- Optional API key input (if you don't want to hardcode) -->
+    <div id="api-key-container">
+      <input type="password" id="api-key" placeholder="Enter your Groq API key" value="">
+      <button id="save-key-btn">Save Key</button>
+    </div>
+    
+    <!-- Story output area -->
+    <div id="adventure-output">Welcome to the adventure! Click "New Game" to begin.</div>
+    
+    <!-- Input area for commands -->
+    <div id="input-area">
+      <input type="text" id="user-input" placeholder="What do you do?">
+      <button id="send-btn">Send</button>
+      <button id="new-game-btn">New Game</button>
+    </div>
   </div>
 
-  <!-- Leaderboard -->
+  <!-- Leaderboard (still shows old ball‑game scores) -->
   <div id="leaderboard">
-    <h2>Top Players</h2>
+    <h2>Top Players (old scores)</h2>
     <ol id="scores-list"></ol>
   </div>
 
-  <!-- Load your game script as module -->
-  <script type="module" src="js/main.js"></script>
+  <!-- Audio elements (unchanged) -->
+  <audio id="backgroundMusic" loop>
+    <source src="audio/background.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="catchSound">
+    <source src="audio/miss.wav" type="audio/mpeg">
+  </audio>
+  <audio id="missSound">
+    <source src="audio/catch.wav" type="audio/mpeg">
+  </audio>
+  <button id="musicToggle">♪</button>
 
-  <!-- Audio Elements -->
-<audio id="backgroundMusic" loop>
-  <source src="audio/background.mp3" type="audio/mpeg">
-</audio>
-<audio id="catchSound">
-  <source src="audio/miss.wav" type="audio/mpeg">
-</audio>
-<audio id="missSound">
-  <source src="audio/catch.wav" type="audio/mpeg">
-</audio>
-<button id="musicToggle">♪</button>
+  <!-- Main script (type="module" because we use Firebase) -->
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
