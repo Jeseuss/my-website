@@ -357,6 +357,7 @@ function startDayCycle() {
 
 // ==================== AI FUNCTIONS ====================
 
+// Update queryGroq to handle responses better
 async function queryGroq(prompt, systemPrompt) {
   if (!GROQ_API_KEY) {
     console.log("No Groq API key provided");
@@ -371,31 +372,27 @@ async function queryGroq(prompt, systemPrompt) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192', // Changed to a definitely working model
+        model: 'mixtral-8x7b-32768',
         messages: [
           {
             role: 'system',
-            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes."
+            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes. Always respond with valid JSON."
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.9,
-        max_tokens: 500,
-        stream: false // Explicitly set to false
+        temperature: 0.9, // Increase temperature for more variety
+        max_tokens: 500
       })
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Groq API error details:', errorText);
-      throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Groq API success:", data); // Debug log
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Groq API error:', error);
@@ -897,48 +894,7 @@ Respond with ONLY valid JSON in this exact format:
 Make it dark, gritty, and fit the crime city theme. The response should feel different for each action.`;
 }
 
-// Update queryGroq to handle responses better
-async function queryGroq(prompt, systemPrompt) {
-  if (!GROQ_API_KEY) {
-    console.log("No Groq API key provided");
-    return null;
-  }
-  
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes. Always respond with valid JSON."
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.9, // Increase temperature for more variety
-        max_tokens: 500
-      })
-    });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('Groq API error:', error);
-    return null;
-  }
-}
 
 // ==================== EVENT LISTENERS ====================
 
