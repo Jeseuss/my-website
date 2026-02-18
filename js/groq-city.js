@@ -20,6 +20,8 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// Import Groq SDK
+import Groq from "https://esm.sh/groq-sdk";
 
 // Firebase Config
 const firebaseConfig = {
@@ -36,8 +38,12 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Groq API Key - FIXED the reference
-const GROQ_API_KEY = "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"; 
+// Initialize Groq with API key
+const GROQ_API_KEY = "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";
+const groq = new Groq({
+  apiKey: GROQ_API_KEY,
+  dangerouslyAllowBrowser: true // Required for browser usage
+});
 
 // Game State
 let currentUser = null;
@@ -182,7 +188,7 @@ function updateUI(user) {
     loadPlayerData();
     if (musicOn && bgMusic) bgMusic.play();
     initializeCity();
-    initAdventureEngine(); // Initialize adventure engine
+    initAdventureEngine();
   } else {
     currentUser = null;
     if (loginForm) loginForm.style.display = 'block';
@@ -221,7 +227,6 @@ async function loadPlayerData() {
       playerData = playerSnap.data();
       console.log("Player data loaded:", playerData);
       
-      // Load adventure state
       if (playerData.adventureHistory) {
         adventureState.history = playerData.adventureHistory;
         adventureState.context = playerData.adventureContext || adventureState.context;
@@ -237,7 +242,6 @@ async function loadPlayerData() {
     renderActions();
     renderMarket();
     
-    // Update adventure display
     setTimeout(() => {
       displayAdventureHistory();
       const locationEl = document.getElementById('adventure-location');
@@ -355,44 +359,80 @@ function startDayCycle() {
   }, 60000);
 }
 
-// ==================== AI FUNCTIONS ====================
+// ==================== AI FUNCTIONS WITH STREAMING ====================
 
-async function queryGroq(prompt, systemPrompt = "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes.") {
+async function queryGroqWithStreaming(prompt, systemPrompt, onChunk) {
   if (!GROQ_API_KEY) {
     console.log("No Groq API key provided");
     return null;
   }
   
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.9,
-        max_tokens: 500
-      })
+    const stream = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "qwen/qwen3-32b", // Using the model from your example
+      temperature: 0.6,
+      max_completion_tokens: 4096,
+      top_p: 0.95,
+      stream: true,
+      stop: null
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    let fullResponse = "";
+    
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        fullResponse += content;
+        if (onChunk) {
+          onChunk(content);
+        }
+      }
     }
+    
+    console.log("Full streaming response:", fullResponse);
+    return fullResponse;
+  } catch (error) {
+    console.error('Groq streaming error:', error);
+    return null;
+  }
+}
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+async function queryGroq(prompt, systemPrompt) {
+  if (!GROQ_API_KEY) {
+    console.log("No Groq API key provided");
+    return null;
+  }
+  
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "qwen/qwen3-32b",
+      temperature: 0.6,
+      max_completion_tokens: 4096,
+      top_p: 0.95,
+      stream: false
+    });
+
+    return completion.choices[0]?.message?.content;
   } catch (error) {
     console.error('Groq API error:', error);
     return null;
@@ -403,21 +443,6 @@ async function getAICityDescription() {
   const prompt = `Generate a gritty, immersive description of a crime-ridden city called "Groq City" for the start of a new day. Include details about the atmosphere, the streets, and the general mood. Make it dark and exciting. Keep it under 100 words.`;
   const response = await queryGroq(prompt);
   return response || "The neon lights flicker over wet pavement as Groq City wakes to another day of crime and opportunity...";
-}
-
-async function getAIActionOutcome(action, playerStats, cityState, success) {
-  const prompt = `A player in Groq City attempted to: ${action.name}. 
-    They ${success ? 'succeeded' : 'failed'}. 
-    Player stats: Strength ${playerStats.strength}, Agility ${playerStats.agility}, Intelligence ${playerStats.intelligence}
-    Generate a short, exciting outcome description. Keep it under 50 words.`;
-  
-  const response = await queryGroq(prompt);
-  
-  if (success) {
-    return response || `You successfully ${action.name.toLowerCase()}! The city trembles at your prowess.`;
-  } else {
-    return response || `Your attempt to ${action.name.toLowerCase()} fails. The city fights back.`;
-  }
 }
 
 // ==================== UI CONTROLS ====================
@@ -504,7 +529,23 @@ async function performAction(action) {
     successChance = Math.min(95, Math.max(5, successChance));
     const success = Math.random() * 100 < successChance;
     
-    const aiDescription = await getAIActionOutcome(action, playerData.stats, cityState, success);
+    // Use streaming for action outcome
+    let aiDescription = "";
+    await queryGroqWithStreaming(
+      `A player in Groq City attempted to: ${action.name}. 
+       They ${success ? 'succeeded' : 'failed'}. 
+       Player stats: Strength ${playerData.stats.strength}, Agility ${playerData.stats.agility}, Intelligence ${playerData.stats.intelligence}
+       Generate a short, exciting outcome description. Keep it under 50 words.`,
+      "You are a gritty crime city narrator.",
+      (chunk) => {
+        aiDescription += chunk;
+        // Optional: Update UI in real-time
+        const log = document.getElementById('crime-log');
+        if (log && log.firstChild) {
+          log.firstChild.textContent += chunk;
+        }
+      }
+    );
     
     let reward = 0;
     if (success) {
@@ -536,7 +577,7 @@ async function performAction(action) {
       await setDoc(playerRef, playerData, { merge: true });
     }
     
-    addToCrimeLog(aiDescription, success, reward);
+    addToCrimeLog(aiDescription || (success ? `Successfully ${action.name.toLowerCase()}!` : `Failed to ${action.name.toLowerCase()}.`), success, reward);
     updatePlayerDisplay();
     renderActions();
     renderMarket();
@@ -626,134 +667,64 @@ window.buyItem = async (itemId) => {
   }
 };
 
-// ==================== ADVENTURE ENGINE ====================
+// ==================== ADVENTURE ENGINE WITH STREAMING ====================
 
 function initAdventureEngine() {
-  const input = document.getElementById('adventure-input');
-  const submitBtn = document.getElementById('adventure-submit');
-  const clearBtn = document.getElementById('adventure-clear');
+  const adventureForm = document.getElementById('adventure-form');
+  const adventureInput = document.getElementById('adventure-input');
+  const adventureSubmit = document.getElementById('adventure-submit');
   
-  if (!input || !submitBtn || !clearBtn) return;
-  
-  // Only add welcome message if history is empty
-  if (adventureState.history.length === 0) {
-    addStoryEntry("⚔️ Your adventure begins in Groq City. The neon lights flicker overhead as you step into the shadows...", "system");
-  } else {
-    displayAdventureHistory();
+  if (adventureForm) {
+    adventureForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const action = adventureInput.value.trim();
+      if (action && !adventureState.isProcessing) {
+        adventureInput.value = '';
+        await processAdventureActionWithStreaming(action);
+      }
+    });
   }
-  
-  submitBtn.addEventListener('click', async () => {
-    const action = input.value.trim();
-    if (!action || adventureState.isProcessing) return;
-    
-    input.value = '';
-    await processAdventureAction(action);
-  });
-  
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !adventureState.isProcessing) {
-      submitBtn.click();
-    }
-  });
-  
-  clearBtn.addEventListener('click', () => {
-    if (confirm('Start a new adventure? Your current story will be saved.')) {
-      adventureState.history = [];
-      adventureState.context = {
-        location: "Groq City Streets",
-        quest: "None",
-        health: 100,
-        inventory: []
-      };
-      const storyLog = document.getElementById('story-log');
-      if (storyLog) storyLog.innerHTML = '';
-      addStoryEntry("⚔️ You start a new adventure in Groq City...", "system");
-      saveAdventureState();
-    }
-  });
 }
 
-function addStoryEntry(text, type = "player") {
-  const storyLog = document.getElementById('story-log');
-  if (!storyLog) return;
+function addStoryEntry(text, type) {
+  const container = document.getElementById('adventure-story');
+  if (!container) return;
   
   const entry = document.createElement('div');
-  entry.className = 'story-entry';
+  entry.className = `story-entry story-${type}`;
   
-  let prefix = "👤";
-  let color = "#4ecdc4";
-  
-  switch(type) {
-    case "system":
-      prefix = "⚙️";
-      color = "#ffe66d";
-      break;
-    case "ai":
-      prefix = "🤖";
-      color = "#ff6b6b";
-      break;
-    case "combat":
-      prefix = "⚔️";
-      color = "#ff0000";
-      break;
-    case "loot":
-      prefix = "💰";
-      color = "#ffd700";
-      break;
-    default:
-      prefix = "👤";
-      color = "#4ecdc4";
+  if (type === 'player') {
+    entry.innerHTML = `<span class="story-player">You:</span> ${text}`;
+  } else if (type === 'ai') {
+    entry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${text}`;
+  } else {
+    entry.innerHTML = `<span class="story-system">⚙️ System:</span> ${text}`;
   }
   
-  entry.innerHTML = `<span style="color: ${color};">${prefix}</span> ${text}`;
-  entry.style.marginBottom = '10px';
-  entry.style.padding = '5px';
-  entry.style.borderLeft = `3px solid ${color}`;
-  entry.style.paddingLeft = '10px';
-  entry.style.animation = 'fadeIn 0.3s ease';
+  container.appendChild(entry);
+  entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   
-  storyLog.appendChild(entry);
-  storyLog.scrollTop = storyLog.scrollHeight;
-  
-  adventureState.history.push({
-    text,
-    type,
-    timestamp: new Date().toISOString()
-  });
-  
-  if (adventureState.history.length > 100) {
+  // Keep adventure history
+  adventureState.history.push({ type, text, timestamp: Date.now() });
+  if (adventureState.history.length > 50) {
     adventureState.history.shift();
   }
 }
 
 function displayAdventureHistory() {
-  const storyLog = document.getElementById('story-log');
-  if (!storyLog) return;
+  const container = document.getElementById('adventure-story');
+  if (!container) return;
   
-  storyLog.innerHTML = '';
-  adventureState.history.forEach(entry => {
-    const prefix = entry.type === "player" ? "👤" : 
-                   entry.type === "system" ? "⚙️" :
-                   entry.type === "combat" ? "⚔️" :
-                   entry.type === "loot" ? "💰" : "🤖";
-    const color = entry.type === "player" ? "#4ecdc4" :
-                  entry.type === "system" ? "#ffe66d" :
-                  entry.type === "combat" ? "#ff0000" :
-                  entry.type === "loot" ? "#ffd700" : "#ff6b6b";
-    
-    const div = document.createElement('div');
-    div.className = 'story-entry';
-    div.innerHTML = `<span style="color: ${color};">${prefix}</span> ${entry.text}`;
-    div.style.marginBottom = '10px';
-    div.style.padding = '5px';
-    div.style.borderLeft = `3px solid ${color}`;
-    div.style.paddingLeft = '10px';
-    storyLog.appendChild(div);
+  container.innerHTML = '';
+  
+  // Display last 20 entries
+  const recentHistory = adventureState.history.slice(-20);
+  recentHistory.forEach(entry => {
+    addStoryEntry(entry.text, entry.type);
   });
-  storyLog.scrollTop = storyLog.scrollHeight;
 }
 
-async function processAdventureAction(action) {
+async function processAdventureActionWithStreaming(action) {
   if (!currentUser) {
     alert("Please login to play the adventure!");
     return;
@@ -761,212 +732,150 @@ async function processAdventureAction(action) {
   
   adventureState.isProcessing = true;
   const submitBtn = document.getElementById('adventure-submit');
+  const input = document.getElementById('adventure-input');
   const originalText = submitBtn.textContent;
   submitBtn.textContent = '🤔 Thinking...';
   submitBtn.disabled = true;
+  input.disabled = true;
   
   addStoryEntry(action, "player");
   
+  // Create a temporary entry for streaming
+  const container = document.getElementById('adventure-story');
+  const streamingEntry = document.createElement('div');
+  streamingEntry.className = 'story-entry story-ai streaming';
+  streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> `;
+  container.appendChild(streamingEntry);
+  
+  let streamedContent = '';
+  
   try {
-    let aiResponse;
+    const contextPrompt = buildAdventureContext(action);
     
-    if (GROQ_API_KEY) {
-      const contextPrompt = buildAdventureContext(action);
-      const response = await queryGroq(contextPrompt, "You are a text adventure game master for a gritty crime city. Generate immersive responses in JSON format.");
-      
-      if (response) {
+    const response = await queryGroqWithStreaming(
+      contextPrompt,
+      `You are a text adventure game master for a gritty crime city called "Groq City". 
+       You MUST respond with ONLY valid JSON in this exact format, no other text:
+       {
+         "narrative": "A vivid, immersive description (2-3 sentences)",
+         "location": "New location or same", 
+         "quest": "New quest or same", 
+         "healthChange": 0,
+         "moneyChange": 0,
+         "reputationChange": 0,
+         "itemFound": null,
+         "combat": false
+       }
+       
+       Be creative! Generate different responses based on the player's action.`,
+      (chunk) => {
+        streamedContent += chunk;
+        // Update the streaming entry in real-time
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent}`;
+      }
+    );
+    
+    // Process the complete response
+    if (response) {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
         try {
-          // Try to parse JSON from response
-          const jsonMatch = response.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            aiResponse = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error("No JSON found");
-          }
+          const aiResponse = JSON.parse(jsonMatch[0]);
+          
+          // Ensure all required fields exist
+          const parsedResponse = {
+            narrative: aiResponse.narrative || streamedContent,
+            location: aiResponse.location || adventureState.context.location,
+            quest: aiResponse.quest || adventureState.context.quest,
+            healthChange: aiResponse.healthChange || 0,
+            moneyChange: aiResponse.moneyChange || 0,
+            reputationChange: aiResponse.reputationChange || 0,
+            itemFound: aiResponse.itemFound || null,
+            combat: aiResponse.combat || false
+          };
+          
+          // Update the entry with the final parsed narrative
+          streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${parsedResponse.narrative}`;
+          
+          await updateGameFromAdventure(parsedResponse);
+          await saveAdventureState();
+          
         } catch (e) {
-          console.error("Failed to parse AI response:", e);
-          aiResponse = getFallbackAdventureResponse(action);
+          console.error("Failed to parse JSON:", e);
+          // Keep the streamed content as the narrative
+          streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent}`;
+          
+          // Create a simple response from the streamed content
+          const simpleResponse = {
+            narrative: streamedContent,
+            location: adventureState.context.location,
+            quest: adventureState.context.quest,
+            healthChange: 0,
+            moneyChange: 0,
+            reputationChange: 0,
+            itemFound: null,
+            combat: false
+          };
+          
+          await updateGameFromAdventure(simpleResponse);
+          await saveAdventureState();
         }
       } else {
-        aiResponse = getFallbackAdventureResponse(action);
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent || "The city streets stretch before you..."}`;
       }
-    } else {
-      aiResponse = getFallbackAdventureResponse(action);
     }
-    
-    const parsedResponse = parseAdventureResponse(aiResponse);
-    addStoryEntry(parsedResponse.narrative, "ai");
-    await updateGameFromAdventure(parsedResponse);
-    await saveAdventureState();
     
   } catch (error) {
     console.error("Adventure error:", error);
-    addStoryEntry("The city's chaos makes it hard to think... Try again.", "system");
+    streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> The city's chaos makes it hard to think... Try again.`;
   } finally {
     adventureState.isProcessing = false;
     submitBtn.textContent = originalText;
     submitBtn.disabled = false;
-  }
-}
-
-function buildAdventureContext(action) {
-  const recentHistory = adventureState.history.slice(-5).map(h => 
-    `${h.type === 'player' ? 'Player' : 'Game'}: ${h.text}`
-  ).join('\n');
-  
-  return `You are the AI narrator for a gritty crime city adventure game called "Groq City". 
-The player is currently in: ${adventureState.context.location}
-Current quest: ${adventureState.context.quest}
-Player health: ${adventureState.context.health}
-Player inventory: ${adventureState.context.inventory.join(', ') || 'empty'}
-Player stats: Str ${playerData.stats.strength}, Agi ${playerData.stats.agility}, Int ${playerData.stats.intelligence}
-
-Recent events:
-${recentHistory}
-
-The player action: "${action}"
-
-Generate a response in this exact JSON format:
-{
-  "narrative": "A vivid, immersive description of what happens (2-3 sentences)",
-  "location": "New location if changed",
-  "quest": "New quest if given/completed",
-  "healthChange": number (negative for damage, positive for healing),
-  "moneyChange": number,
-  "reputationChange": number,
-  "itemFound": "item name or null",
-  "combat": boolean
-}
-
-Make it dark, gritty, and fit the crime city theme.`;
-}
-
-function getFallbackAdventureResponse(action) {
-  const responses = [
-    {
-      narrative: "You walk through the rain-slicked streets. The neon signs reflect off puddles as shadows move in alleys.",
-      location: "Downtown",
-      quest: "Find the informant",
-      healthChange: 0,
-      moneyChange: 0,
-      reputationChange: 1,
-      itemFound: null,
-      combat: false
-    },
-    {
-      narrative: "A group of thugs blocks your path. 'This is our turf,' one growls. They look ready for a fight.",
-      location: "Industrial District",
-      quest: "Deal with the thugs",
-      healthChange: -10,
-      moneyChange: 0,
-      reputationChange: 5,
-      itemFound: null,
-      combat: true
-    },
-    {
-      narrative: "You find an abandoned warehouse. Inside, a briefcase sits on a crate. It's unlocked...",
-      location: "Warehouse District",
-      quest: "Check the briefcase",
-      healthChange: 0,
-      moneyChange: 500,
-      reputationChange: 2,
-      itemFound: "Briefcase",
-      combat: false
-    }
-  ];
-  
-  return responses[Math.floor(Math.random() * responses.length)];
-}
-
-function parseAdventureResponse(response) {
-  if (!response) {
-    return {
-      narrative: "Nothing happens. The city is quiet tonight.",
-      location: adventureState.context.location,
-      quest: adventureState.context.quest,
-      healthChange: 0,
-      moneyChange: 0,
-      reputationChange: 0,
-      itemFound: null,
-      combat: false
-    };
-  }
-  
-  return response;
-}
-
-async function updateGameFromAdventure(parsed) {
-  let updates = false;
-  
-  if (parsed.location && parsed.location !== adventureState.context.location) {
-    adventureState.context.location = parsed.location;
-    const locationEl = document.getElementById('adventure-location');
-    if (locationEl) locationEl.textContent = parsed.location;
-    updates = true;
-  }
-  
-  if (parsed.quest && parsed.quest !== adventureState.context.quest) {
-    adventureState.context.quest = parsed.quest;
-    const questEl = document.getElementById('adventure-quest');
-    if (questEl) questEl.textContent = parsed.quest;
-    updates = true;
-  }
-  
-  if (parsed.healthChange) {
-    adventureState.context.health = Math.max(0, Math.min(100, 
-      (adventureState.context.health || 100) + parsed.healthChange));
+    input.disabled = false;
+    input.focus();
     
-    if (parsed.healthChange < 0) {
-      addStoryEntry(`You take ${-parsed.healthChange} damage!`, "combat");
-    } else if (parsed.healthChange > 0) {
-      addStoryEntry(`You heal ${parsed.healthChange} health.`, "system");
-    }
-    updates = true;
+    // Remove streaming class
+    streamingEntry.classList.remove('streaming');
   }
+}
+
+async function updateGameFromAdventure(result) {
+  // Update player stats
+  playerData.money = (playerData.money || 0) + (result.moneyChange || 0);
+  playerData.reputation = (playerData.reputation || 0) + (result.reputationChange || 0);
   
-  if (parsed.moneyChange) {
-    playerData.money = (playerData.money || 1000) + parsed.moneyChange;
-    updatePlayerDisplay();
-    
-    if (parsed.moneyChange > 0) {
-      addStoryEntry(`You found $${parsed.moneyChange}!`, "loot");
-    }
-    updates = true;
-  }
+  // Update health (you might want to add health to playerData if not already there)
+  if (!playerData.health) playerData.health = 100;
+  playerData.health = Math.max(0, Math.min(100, playerData.health + (result.healthChange || 0)));
   
-  if (parsed.reputationChange) {
-    playerData.reputation = (playerData.reputation || 0) + parsed.reputationChange;
-    updatePlayerDisplay();
-    updates = true;
-  }
+  // Update adventure context
+  adventureState.context.location = result.location || adventureState.context.location;
+  adventureState.context.quest = result.quest || adventureState.context.quest;
+  adventureState.context.health = playerData.health;
   
-  if (parsed.itemFound) {
+  // Add item to inventory if found
+  if (result.itemFound) {
     if (!playerData.inventory) playerData.inventory = [];
     playerData.inventory.push({
-      name: parsed.itemFound,
+      name: result.itemFound,
       foundAt: Timestamp.now()
     });
-    addStoryEntry(`You found: ${parsed.itemFound}!`, "loot");
-    updates = true;
+    addStoryEntry(`Found item: ${result.itemFound}!`, "system");
   }
   
-  if (parsed.combat) {
-    addStoryEntry("⚔️ Combat initiated!", "combat");
+  // Handle combat
+  if (result.combat) {
+    addStoryEntry("You're in combat! Be careful...", "system");
   }
   
-  if (updates && currentUser) {
-    try {
-      const playerRef = doc(db, "players", currentUser.uid);
-      await updateDoc(playerRef, {
-        money: playerData.money,
-        reputation: playerData.reputation,
-        inventory: playerData.inventory,
-        adventureContext: adventureState.context
-      });
-    } catch (error) {
-      console.error("Error saving adventure state:", error);
-    }
-  }
+  // Update UI
+  updatePlayerDisplay();
+  
+  const locationEl = document.getElementById('adventure-location');
+  const questEl = document.getElementById('adventure-quest');
+  if (locationEl) locationEl.textContent = adventureState.context.location;
+  if (questEl) questEl.textContent = adventureState.context.quest;
 }
 
 async function saveAdventureState() {
@@ -975,51 +884,89 @@ async function saveAdventureState() {
   try {
     const playerRef = doc(db, "players", currentUser.uid);
     await updateDoc(playerRef, {
+      money: playerData.money,
+      reputation: playerData.reputation,
+      inventory: playerData.inventory,
+      stats: playerData.stats,
       adventureHistory: adventureState.history,
-      adventureContext: adventureState.context
+      adventureContext: adventureState.context,
+      lastUpdate: Timestamp.now()
     });
   } catch (error) {
-    console.error("Error saving adventure:", error);
+    console.error("Error saving adventure state:", error);
   }
+}
+
+function buildAdventureContext(action) {
+  const recentHistory = adventureState.history.slice(-3).map(h => 
+    `${h.type}: ${h.text}`
+  ).join('\n');
+  
+  return `You are the AI narrator for Groq City, a gritty crime-filled metropolis.
+
+Current game state:
+- Location: ${adventureState.context.location}
+- Active quest: ${adventureState.context.quest}
+- Health: ${playerData.health || 100}
+- Money: $${playerData.money}
+- Reputation: ${playerData.reputation}
+- Stats: Str ${playerData.stats.strength}, Agi ${playerData.stats.agility}, Int ${playerData.stats.intelligence}
+
+Recent events:
+${recentHistory}
+
+Player's new action: "${action}"
+
+Generate a UNIQUE response based on this specific action. Be creative! Don't repeat scenarios.
+Respond with ONLY valid JSON in this exact format:
+{
+  "narrative": "A vivid, immersive 2-3 sentence description of what happens",
+  "location": "New location (can be same or different)",
+  "quest": "New quest or current quest",
+  "healthChange": number between -30 and 30,
+  "moneyChange": number between -200 and 500,
+  "reputationChange": number between -10 and 20,
+  "itemFound": "item name or null",
+  "combat": true or false
+}
+
+Make it dark, gritty, and fit the crime city theme. The response should feel different for each action.`;
 }
 
 // ==================== LEADERBOARD FUNCTIONS ====================
 
-function showLeaderboard() {
-  const q = query(
-    collection(db, "scores"),
-    orderBy("score", "desc"),
-    limit(10)
-  );
-  
-  onSnapshot(q, (snapshot) => {
-    const leaderboard = document.getElementById("scores-list");
-    if (!leaderboard) return;
-    
-    leaderboard.innerHTML = "";
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${data.name || "Anonymous"}</span> <span>$${data.score || 0}</span>`;
-      leaderboard.appendChild(li);
-    });
-  }, (error) => {
-    console.error("Leaderboard error:", error);
-  });
-}
-
-async function saveScore(name, score) {
-  if (!currentUser) return;
+async function showLeaderboard() {
+  const leaderboardDiv = document.getElementById('leaderboard');
+  if (!leaderboardDiv) return;
   
   try {
-    await addDoc(collection(db, "scores"), {
-      name: name || "Anonymous",
-      score: score || 0,
-      timestamp: Timestamp.now(),
-      userId: currentUser.uid
+    const playersRef = collection(db, "players");
+    const q = query(playersRef, orderBy("reputation", "desc"), limit(10));
+    
+    onSnapshot(q, (snapshot) => {
+      let html = '<h2>🏆 Top Criminals</h2>';
+      
+      if (snapshot.empty) {
+        html += '<p>No players yet. Be the first!</p>';
+      } else {
+        snapshot.forEach((doc, index) => {
+          const data = doc.data();
+          html += `
+            <div class="leaderboard-item">
+              <span class="leaderboard-rank">#${index + 1}</span>
+              <span class="leaderboard-name">${doc.id.slice(0, 6)}...</span>
+              <span class="leaderboard-rep">${data.reputation || 0} rep</span>
+              <span class="leaderboard-money">$${data.money || 0}</span>
+            </div>
+          `;
+        });
+      }
+      
+      leaderboardDiv.innerHTML = html;
     });
   } catch (error) {
-    console.error("Error saving score:", error);
+    console.error("Leaderboard error:", error);
+    leaderboardDiv.innerHTML = '<p>Error loading leaderboard</p>';
   }
 }
 
@@ -1055,7 +1002,12 @@ onAuthStateChanged(auth, (user) => {
 // Initialize leaderboard
 showLeaderboard();
 
+// Initialize adventure engine when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initAdventureEngine();
+});
+
 // Make functions globally available
 window.buyItem = buyItem;
 
-console.log("Groq City game initialized with Adventure Engine!");
+console.log("Groq City game initialized with Streaming Adventure Engine!");
