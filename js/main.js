@@ -152,6 +152,7 @@ function resetGame() {
 
 // Send an action (player command) to Groq
 async function sendAction(actionText) {
+  console.log('🔑 API key being used (first 10 chars):', GROQ_API_KEY.substring(0, 10));
   if (!GROQ_API_KEY || !GROQ_API_KEY.startsWith('gsk_')) {
     appendOutput('❌ Groq API key is missing or invalid. Please hardcode a valid key in main.js\n');
     return;
