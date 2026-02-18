@@ -4,7 +4,7 @@ import {
   collection, 
   addDoc, 
   query, 
-  orderBy, 
+  orderBy,  
   limit, 
   onSnapshot, 
   Timestamp,
@@ -37,7 +37,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Initialize Groq (REPLACE WITH YOUR ACTUAL KEY)
+// Initialize  (REPLACE WITH YOUR ACTUAL KEY)
 const GROQ_API_KEY = "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"; 
 
 // Game State
@@ -223,7 +223,7 @@ async function initializeCity() {
   
   try {
     // Only try AI if we have an API key
-    if (GROQ_API_KEY !== "YOUR_GROQ_API_KEY_HERE") {
+    if (GROQ_API_KEY !== "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") {
       const description = await getAICityDescription();
       if (description) {
         cityState.description = description;
@@ -259,7 +259,7 @@ async function initializeCity() {
 // AI Integration Functions (with fallbacks)
 async function queryGroq(prompt) {
   // Skip if no API key
-  if (GROQ_API_KEY === "YOUR_GROQ_API_KEY_HERE") {
+  if (GROQ_API_KEY === "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") {
     console.log("No Groq API key provided, using fallback responses");
     return null;
   }
@@ -268,7 +268,7 @@ async function queryGroq(prompt) {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Authorization': `Bearer ${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}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
