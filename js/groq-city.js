@@ -357,7 +357,7 @@ function startDayCycle() {
 
 // ==================== AI FUNCTIONS ====================
 
-async function queryGroq(prompt, systemPrompt = "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes.") {
+async function queryGroq(prompt, systemPrompt) {
   if (!GROQ_API_KEY) {
     console.log("No Groq API key provided");
     return null;
@@ -371,11 +371,11 @@ async function queryGroq(prompt, systemPrompt = "You are the AI god of a crime-r
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: 'llama3-8b-8192', // Changed to a definitely working model
         messages: [
           {
             role: 'system',
-            content: systemPrompt
+            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes."
           },
           {
             role: 'user',
@@ -383,15 +383,19 @@ async function queryGroq(prompt, systemPrompt = "You are the AI god of a crime-r
           }
         ],
         temperature: 0.9,
-        max_tokens: 500
+        max_tokens: 500,
+        stream: false // Explicitly set to false
       })
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Groq API error details:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log("Groq API success:", data); // Debug log
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Groq API error:', error);
