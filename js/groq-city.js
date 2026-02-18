@@ -357,7 +357,8 @@ function startDayCycle() {
 
 // ==================== AI FUNCTIONS ====================
 
-// Update queryGroq to handle responses better
+// ==================== AI FUNCTIONS ====================
+
 async function queryGroq(prompt, systemPrompt) {
   if (!GROQ_API_KEY) {
     console.log("No Groq API key provided");
@@ -372,34 +373,37 @@ async function queryGroq(prompt, systemPrompt) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: 'llama3-8b-8192', // Using confirmed working model
         messages: [
           {
             role: 'system',
-            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes. Always respond with valid JSON."
+            content: systemPrompt || "You are the AI god of a crime-ridden city. Generate immersive, gritty descriptions and outcomes."
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.9, // Increase temperature for more variety
-        max_tokens: 500
+        temperature: 0.9,
+        max_tokens: 500,
+        stream: false
       })
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Groq API error details:', errorText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log("Groq API response received:", data);
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Groq API error:', error);
     return null;
   }
 }
-
 async function getAICityDescription() {
   const prompt = `Generate a gritty, immersive description of a crime-ridden city called "Groq City" for the start of a new day. Include details about the atmosphere, the streets, and the general mood. Make it dark and exciting. Keep it under 100 words.`;
   const response = await queryGroq(prompt);
