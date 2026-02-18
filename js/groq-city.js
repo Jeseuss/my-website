@@ -78,6 +78,10 @@ let adventureState = {
   isProcessing: false
 };
 
+// Prevent double-binding of adventure UI listeners
+let adventureEngineInitialized = false;
+
+
 // Available actions
 const actions = [
   { id: 'rob', name: '💵 Rob Store', type: 'crime', cost: 0, baseSuccess: 40 },
@@ -541,7 +545,13 @@ async function performAction(action) {
         aiDescription += chunk;
         // Optional: Update UI in real-time
         const log = document.getElementById('crime-log');
-        if (log && log.firstChild) {
+        if (log) {
+          if (!log.firstChild || !log.firstChild.classList?.contains('log-entry')) {
+            const temp = document.createElement('div');
+            temp.className = 'log-entry log-success';
+            temp.textContent = `[Day ${cityState.day}] `;
+            log.insertBefore(temp, log.firstChild);
+          }
           log.firstChild.textContent += chunk;
         }
       }
@@ -668,13 +678,68 @@ window.buyItem = async (itemId) => {
 };
 
 // ==================== ADVENTURE ENGINE WITH STREAMING ====================
+// UI helpers (supports both older and current HTML ids)
+function getStoryContainer() {
+  return (
+    document.getElementById('adventure-story') ||
+    document.getElementById('story-log')
+  );
+}
+
+function getAdventureForm() {
+  return document.getElementById('adventure-form');
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+// Robustly extract the first JSON object from model output
+function extractFirstJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    } else {
+      if (ch === '"') { inString = true; continue; }
+      if (ch === '{') depth++;
+      if (ch === '}') depth--;
+      if (depth === 0) {
+        const candidate = text.slice(start, i + 1);
+        try { return JSON.parse(candidate); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
 
 function initAdventureEngine() {
-  const adventureForm = document.getElementById('adventure-form');
+  if (adventureEngineInitialized) return;
+  adventureEngineInitialized = true;
+
   const adventureInput = document.getElementById('adventure-input');
   const adventureSubmit = document.getElementById('adventure-submit');
-  
-  if (adventureForm) {
+  const adventureClear = document.getElementById('adventure-clear');
+  const adventureForm = getAdventureForm();
+
+  if (adventureForm && adventureInput) {
     adventureForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const action = adventureInput.value.trim();
@@ -684,39 +749,81 @@ function initAdventureEngine() {
       }
     });
   }
+
+  if (adventureSubmit && adventureInput) {
+    adventureSubmit.addEventListener('click', async () => {
+      const action = adventureInput.value.trim();
+      if (action && !adventureState.isProcessing) {
+        adventureInput.value = '';
+        await processAdventureActionWithStreaming(action);
+      }
+    });
+  }
+
+  if (adventureInput) {
+    adventureInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !adventureState.isProcessing) {
+        e.preventDefault();
+        adventureSubmit?.click();
+      }
+    });
+  }
+
+  if (adventureClear) {
+    adventureClear.addEventListener('click', () => {
+      const container = getStoryContainer();
+      if (container) container.innerHTML = '';
+
+      adventureState.history = [];
+      adventureState.context = {
+        location: "Groq City Streets",
+        quest: "None",
+        health: 100,
+        inventory: []
+      };
+
+      const locationEl = document.getElementById('adventure-location');
+      const questEl = document.getElementById('adventure-quest');
+      if (locationEl) locationEl.textContent = adventureState.context.location;
+      if (questEl) questEl.textContent = adventureState.context.quest;
+
+      addStoryEntry("⚔️ Your adventure begins in Groq City...", "system");
+    });
+  }
 }
 
 function addStoryEntry(text, type) {
-  const container = document.getElementById('adventure-story');
+  const container = getStoryContainer();
   if (!container) return;
-  
+
   const entry = document.createElement('div');
   entry.className = `story-entry story-${type}`;
-  
+  entry.style.whiteSpace = "pre-wrap";
+
+  const safeText = escapeHtml(text);
+
   if (type === 'player') {
-    entry.innerHTML = `<span class="story-player">You:</span> ${text}`;
+    entry.innerHTML = `<span class="story-player">You:</span> ${safeText}`;
   } else if (type === 'ai') {
-    entry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${text}`;
+    entry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${safeText}`;
   } else {
-    entry.innerHTML = `<span class="story-system">⚙️ System:</span> ${text}`;
+    entry.innerHTML = `<span class="story-system">⚙️ System:</span> ${safeText}`;
   }
-  
+
   container.appendChild(entry);
   entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  
+
   // Keep adventure history
   adventureState.history.push({ type, text, timestamp: Date.now() });
-  if (adventureState.history.length > 50) {
-    adventureState.history.shift();
-  }
+  if (adventureState.history.length > 50) adventureState.history.shift();
 }
 
 function displayAdventureHistory() {
-  const container = document.getElementById('adventure-story');
+  const container = getStoryContainer();
   if (!container) return;
-  
+
   container.innerHTML = '';
-  
+
   // Display last 20 entries
   const recentHistory = adventureState.history.slice(-20);
   recentHistory.forEach(entry => {
@@ -741,7 +848,7 @@ async function processAdventureActionWithStreaming(action) {
   addStoryEntry(action, "player");
   
   // Create a temporary entry for streaming
-  const container = document.getElementById('adventure-story');
+  const container = getStoryContainer();
   const streamingEntry = document.createElement('div');
   streamingEntry.className = 'story-entry story-ai streaming';
   streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> `;
@@ -771,57 +878,51 @@ async function processAdventureActionWithStreaming(action) {
       (chunk) => {
         streamedContent += chunk;
         // Update the streaming entry in real-time
-        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent}`;
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(streamedContent)}`;
       }
     );
     
     // Process the complete response
     if (response) {
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const aiResponse = JSON.parse(jsonMatch[0]);
-          
-          // Ensure all required fields exist
-          const parsedResponse = {
-            narrative: aiResponse.narrative || streamedContent,
-            location: aiResponse.location || adventureState.context.location,
-            quest: aiResponse.quest || adventureState.context.quest,
-            healthChange: aiResponse.healthChange || 0,
-            moneyChange: aiResponse.moneyChange || 0,
-            reputationChange: aiResponse.reputationChange || 0,
-            itemFound: aiResponse.itemFound || null,
-            combat: aiResponse.combat || false
-          };
-          
-          // Update the entry with the final parsed narrative
-          streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${parsedResponse.narrative}`;
-          
-          await updateGameFromAdventure(parsedResponse);
-          await saveAdventureState();
-          
-        } catch (e) {
-          console.error("Failed to parse JSON:", e);
-          // Keep the streamed content as the narrative
-          streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent}`;
-          
-          // Create a simple response from the streamed content
-          const simpleResponse = {
-            narrative: streamedContent,
-            location: adventureState.context.location,
-            quest: adventureState.context.quest,
-            healthChange: 0,
-            moneyChange: 0,
-            reputationChange: 0,
-            itemFound: null,
-            combat: false
-          };
-          
-          await updateGameFromAdventure(simpleResponse);
-          await saveAdventureState();
-        }
+      const aiResponse = extractFirstJsonObject(response);
+
+      if (aiResponse) {
+        // Ensure all required fields exist
+        const parsedResponse = {
+          narrative: aiResponse.narrative || streamedContent,
+          location: aiResponse.location || adventureState.context.location,
+          quest: aiResponse.quest || adventureState.context.quest,
+          healthChange: aiResponse.healthChange || 0,
+          moneyChange: aiResponse.moneyChange || 0,
+          reputationChange: aiResponse.reputationChange || 0,
+          itemFound: aiResponse.itemFound || null,
+          combat: aiResponse.combat || false
+        };
+
+        // Update the entry with the final parsed narrative
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(parsedResponse.narrative)}`;
+
+        await updateGameFromAdventure(parsedResponse);
+        await saveAdventureState();
       } else {
-        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${streamedContent || "The city streets stretch before you..."}`;
+        // No valid JSON: fall back to streamed content
+        streamingEntry.innerHTML = `<span class="story-ai">🎮 Game:</span> ${escapeHtml(streamedContent || "The city streets stretch before you...")}`;
+
+        const simpleResponse = {
+          narrative: streamedContent || "The city streets stretch before you...",
+          location: adventureState.context.location,
+          quest: adventureState.context.quest,
+          healthChange: 0,
+          moneyChange: 0,
+          reputationChange: 0,
+          itemFound: null,
+          combat: false
+        };
+
+        await updateGameFromAdventure(simpleResponse);
+        await saveAdventureState();
+      }
+    }
       }
     }
     
@@ -1006,8 +1107,5 @@ showLeaderboard();
 document.addEventListener('DOMContentLoaded', () => {
   initAdventureEngine();
 });
-
-// Make functions globally available
-window.buyItem = buyItem;
 
 console.log("Groq City game initialized with Streaming Adventure Engine!");
