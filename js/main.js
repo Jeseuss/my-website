@@ -17,7 +17,7 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// -------------------- Firebase Setup --------------------
+// Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDtKRlsPmdOMtzY_ESJFq3JiduLPPbz1QQ",
   authDomain: "dbfinal-9fadb.firebaseapp.com",
@@ -30,9 +30,13 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// -------------------- Music (unchanged) --------------------
+// Audio elements
 const bgMusic = document.getElementById("backgroundMusic");
+const catchSound = document.getElementById("catchSound");
+const missSound = document.getElementById("missSound");
 const musicToggle = document.getElementById("musicToggle");
+
+// Music control
 let musicOn = true;
 bgMusic.volume = 0.5;
 
@@ -40,230 +44,305 @@ musicToggle.addEventListener("click", () => {
   musicOn = !musicOn;
   musicToggle.textContent = musicOn ? "♪" : "🔇";
   if (musicOn) {
-    bgMusic.play().catch(() => {});
+    bgMusic.play();
   } else {
     bgMusic.pause();
   }
 });
 
-// -------------------- Authentication UI --------------------
+// Game setup
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let ballVisible = false;
+let clickFeedback = { active: false, x: 0, y: 0, time: 0 };
+let playerName = "Anonymous"; // Will be set after login
+let score = 0;
+let attemptsLeft = 3;
+let gameActive = false;
+let speedDecayInterval;
+
+// Ball physics
+let ball = { 
+  x: 0, y: 0,
+  r: 15, 
+  color: "blue", 
+  vx: 0, vy: 0,
+  currentSpeed: 100
+};
+
+let BASE_SPEED = 8;
+let SPEED_DECAY_RATE = 1;
+
+const difficulty = {
+  easy: { speed: 6, decay: 0.8 },
+  medium: { speed: 8, decay: 1 }, 
+  hard: { speed: 12, decay: 1.2 }
+};
+
+let lastFrameTime = performance.now();
+
+// Authentication functions
+async function login(email, password) {
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    alert("Login failed: " + error.message);
+  }
+}
+
+async function signup(email, password) {
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    alert("Signup failed: " + error.message);
+  }
+}
+
+async function logout() {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    alert("Logout failed: " + error.message);
+  }
+}
+
+// Update UI based on auth state
 function updateUI(user) {
   const loginForm = document.getElementById('login-form');
   const userInfo = document.getElementById('user-info');
   const userEmail = document.getElementById('user-email');
-  const gameContainer = document.getElementById('game-container');
   
   if (user) {
+    // User is logged in
     loginForm.style.display = 'none';
     userInfo.style.display = 'block';
     userEmail.textContent = user.email;
-    gameContainer.style.display = 'block';   // show adventure game
+    
+    // Enable game elements
+    document.getElementById('difficulty').style.display = 'flex';
+    document.getElementById('game-container').style.display = 'block';
+    document.getElementById('leaderboard').style.display = 'block';
+    
+    // Prompt for player name
+    playerName = prompt("What do your friends call you?") || "Anonymous";
   } else {
+    // User is logged out
     loginForm.style.display = 'block';
     userInfo.style.display = 'none';
-    gameContainer.style.display = 'none';
+    
+    // Disable game elements
+    document.getElementById('difficulty').style.display = 'none';
+    document.getElementById('game-container').style.display = 'none';
+    document.getElementById('leaderboard').style.display = 'none';
   }
 }
 
+// Set up auth event listeners
 document.getElementById('login-btn').addEventListener('click', () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-  signInWithEmailAndPassword(auth, email, password).catch(err => alert(err.message));
+  login(email, password);
 });
 
 document.getElementById('signup-btn').addEventListener('click', () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-  createUserWithEmailAndPassword(auth, email, password).catch(err => alert(err.message));
+  signup(email, password);
 });
 
-document.getElementById('logout-btn').addEventListener('click', () => {
-  signOut(auth).catch(err => alert(err.message));
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+// Listen for auth state changes
+onAuthStateChanged(auth, (user) => {
+  updateUI(user);
 });
 
-onAuthStateChanged(auth, updateUI);
+// Start game button
+document.getElementById("startButton").addEventListener("click", startGame);
 
-// -------------------- Groq Text Adventure --------------------
-// 🔑 HARDCODE YOUR API KEY HERE (starts with gsk_...)
-const GROQ_API_KEY = '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';   // <-- replace with your actual key
-
-// DOM elements
-const outputDiv = document.getElementById('adventure-output');
-const optionsContainer = document.getElementById('options-container');
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
-const newGameBtn = document.getElementById('new-game-btn');
-
-// Current game state (will be updated after each action)
-let currentState = null;
-
-// Initial state (first scene)
-const INITIAL_STATE = {
-  location: "Mossy dungeon stairwell",
-  hp: 10,
-  inventory: ["torch"],
-  flags: ["intro_started"]
-};
-
-// System prompt (highest priority, constant)
-const SYSTEM_PROMPT = `You are an interactive fiction game engine.
-You must output ONLY valid JSON. No markdown. No extra text.
-You run a single-player adventure with persistent state.
-Tone: vivid, cinematic, but concise.
-Never mention you are an AI. Never mention policies.
-Do not ask the player what they want to do generally—always provide concrete options.
-Keep narration 60–140 words.
-Provide exactly 4 options. Each option must be a short action command.
-Enforce consistency: do not invent items/characters that contradict the given state.
-If the player attempts something impossible, narrate failure and offer alternatives.
-Safety: avoid graphic gore and explicit sexual content.
-
-JSON schema (strict):
-{
-  "narration": string,
-  "options": [string, string, string, string],
-  "state": {
-    "location": string,
-    "hp": number,
-    "inventory": string[],
-    "flags": string[]
-  }
-}`;
-
-// Developer message (reinforces rules)
-const DEVELOPER_PROMPT = `You must keep the game fair. No deus ex machina saves.
-Keep puzzles solvable. Track inventory and flags.
-Options must be plausible next actions based on the narration.`;
-
-// Helper to append text to output
-function appendOutput(text) {
-  outputDiv.innerHTML += text;
-  outputDiv.scrollTop = outputDiv.scrollHeight;
-}
-
-// Clear output and reset game
-function resetGame() {
-  outputDiv.innerHTML = '';
-  optionsContainer.innerHTML = '';
-  userInput.value = '';
-  currentState = { ...INITIAL_STATE }; // copy
-  sendAction('START');
-}
-
-// Send an action (player command) to Groq
-async function sendAction(actionText) {
-  console.log('🔑 API key being used (first 10 chars):', GROQ_API_KEY.substring(0, 10));
-  if (!GROQ_API_KEY || !GROQ_API_KEY.startsWith('gsk_')) {
-    appendOutput('❌ Groq API key is missing or invalid. Please hardcode a valid key in main.js\n');
+function startGame() {
+  if (!auth.currentUser) {
+    alert("Please login to play the game!");
     return;
   }
-
-  // Show what the player did
-  if (actionText !== 'START') {
-    appendOutput(`\n> ${actionText}\n\n`);
+  
+  if (gameActive) return;
+  if (musicOn) {
+    bgMusic.currentTime = 0;
+    bgMusic.play();
   }
-
-  // Build the user message with current state and action
-  const userMessage = `Current state: ${JSON.stringify(currentState)}\nPlayer action: ${actionText}`;
-
-  // Prepare messages array
-  const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'developer', content: DEVELOPER_PROMPT },
-    { role: 'user', content: userMessage }
-  ];
-
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',  // or any model you prefer
-        messages: messages,
-        temperature: 0.7,
-        max_completion_tokens: 1024,
-        top_p: 0.95,
-        stream: false   // we want complete JSON
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Groq API error (${response.status}): ${errorText}`);
+  
+  const difficultyLevel = document.getElementById("difficultySelect").value;
+  
+  gameActive = true;
+  attemptsLeft = 3;
+  score = 0;
+  ballVisible = true;
+  
+  resetBall();
+  ball.currentSpeed = 100;
+  BASE_SPEED = difficulty[difficultyLevel].speed;
+  SPEED_DECAY_RATE = difficulty[difficultyLevel].decay;
+  
+  do {
+    ball.vx = (Math.random() * 2 - 1) * BASE_SPEED;
+    ball.vy = (Math.random() * 2 - 1) * BASE_SPEED;
+  } while (Math.abs(ball.vx) < 0.5 || Math.abs(ball.vy) < 0.5);
+  
+  if (speedDecayInterval) clearInterval(speedDecayInterval);
+  speedDecayInterval = setInterval(() => {
+    if (gameActive) {
+      ball.currentSpeed = Math.max(20, ball.currentSpeed - SPEED_DECAY_RATE);
+      updateSpeed();
     }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Empty response from Groq');
-    }
-
-    // Parse the JSON
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch (e) {
-      console.error('Failed to parse JSON:', content);
-      appendOutput(`\n⚠️ The game engine returned invalid data. Please try again.\n`);
-      // Optionally, you could retry once with a repair prompt, but we keep it simple.
-      return;
-    }
-
-    // Validate basic schema
-    if (!parsed.narration || !Array.isArray(parsed.options) || parsed.options.length !== 4 || !parsed.state) {
-      throw new Error('Response does not match the required schema');
-    }
-
-    // Update current state
-    currentState = parsed.state;
-
-    // Display narration
-    appendOutput(parsed.narration + '\n\n');
-
-    // Update options buttons
-    renderOptions(parsed.options);
-
-  } catch (error) {
-    console.error(error);
-    appendOutput(`\n❌ Error: ${error.message}\n`);
-  }
+  }, 1000);
+  
+  lastFrameTime = performance.now();
+  update();
 }
 
-// Render the four option buttons
-function renderOptions(options) {
-  optionsContainer.innerHTML = '';
-  options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.textContent = opt;
-    btn.className = 'option-btn'; // you can style this
-    btn.addEventListener('click', () => {
-      sendAction(opt);
-    });
-    optionsContainer.appendChild(btn);
+function resetBall() {
+  ball.x = Math.max(ball.r, Math.min(canvas.width - ball.r, Math.random() * canvas.width));
+  ball.y = Math.max(ball.r, Math.min(canvas.height - ball.r, Math.random() * canvas.height));
+  ball.color = getRandomColor();
+  ballVisible = true;
+}
+
+function updateSpeed() {
+  const speedFactor = ball.currentSpeed / 100;
+  const directionX = ball.vx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vx);
+  const directionY = ball.vy === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vy);
+  
+  ball.vx = directionX * BASE_SPEED * speedFactor;
+  ball.vy = directionY * BASE_SPEED * speedFactor;
+}
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  if (gameActive) {
+    const now = performance.now();
+    const deltaTime = (now - lastFrameTime) / 16;
+    lastFrameTime = now;
+    
+    ball.x += ball.vx * deltaTime;
+    ball.y += ball.vy * deltaTime;
+    
+    if (ball.x < ball.r) {
+      ball.x = ball.r;
+      ball.vx *= -1;
+      ball.color = getRandomColor();
+    } else if (ball.x > canvas.width - ball.r) {
+      ball.x = canvas.width - ball.r;
+      ball.vx *= -1;
+      ball.color = getRandomColor();
+    }
+    
+    if (ball.y < ball.r) {
+      ball.y = ball.r;
+      ball.vy *= -1;
+      ball.color = getRandomColor();
+    } else if (ball.y > canvas.height - ball.r) {
+      ball.y = canvas.height - ball.r;
+      ball.vy *= -1;
+      ball.color = getRandomColor();
+    }
+  }
+  
+  if (ballVisible) {
+    drawBall();
+  }
+  
+  if (clickFeedback.active) {
+    const fade = 1 - (performance.now() - clickFeedback.time) / 500;
+    if (fade > 0) {
+      ctx.beginPath();
+      ctx.arc(clickFeedback.x, clickFeedback.y, 30 * fade, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 0, 0, ${fade})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    } else {
+      clickFeedback.active = false;
+    }
+  }
+  
+  drawSpeedMeter();
+  requestAnimationFrame(update);
+}
+
+function drawBall() {
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = ball.color;
+  ctx.fill();
+}
+
+function drawSpeedMeter() {
+  ctx.fillStyle = "black";
+  ctx.font = "16px Arial";
+  ctx.fillText(`Speed: ${Math.round(ball.currentSpeed)}%`, 20, 30);
+  ctx.fillText(`Attempts: ${attemptsLeft}`, 20, 60);
+}
+
+canvas.addEventListener("click", (e) => {
+  if (!gameActive || !auth.currentUser) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  
+  clickFeedback = {
+    active: true,
+    x: mouseX,
+    y: mouseY,
+    time: performance.now()
+  };
+  
+  const distance = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
+  
+  if (distance <= ball.r * 1.5) {
+    catchSound.currentTime = 0;
+    catchSound.play();
+    score = Math.round(ball.currentSpeed);
+    saveScore(playerName, score);
+    alert(`Caught at ${score}% speed!`);
+    endGame();
+  } else {
+    missSound.currentTime = 0;
+    missSound.play();
+    attemptsLeft--;
+    document.getElementById("score").textContent = `Attempts: ${attemptsLeft}`;
+    
+    if (attemptsLeft <= 0) {
+      alert("Game over!");
+      endGame();
+    }
+  }
+});
+
+function endGame() {
+  bgMusic.pause();
+  gameActive = false;
+  clearInterval(speedDecayInterval);
+  ball.vx = 0;
+  ball.vy = 0;
+}
+
+function getRandomColor() {
+  return `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`;
+}
+
+async function saveScore(name, score) {
+  if (!auth.currentUser) return;
+  
+  await addDoc(collection(db, "scores"), {
+    name,
+    score,
+    timestamp: Timestamp.now(),
+    userId: auth.currentUser.uid
   });
 }
 
-// Event listeners for free text input
-sendBtn.addEventListener('click', () => {
-  const text = userInput.value.trim();
-  if (text) {
-    sendAction(text);
-    userInput.value = '';
-  }
-});
-
-userInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    sendBtn.click();
-  }
-});
-
-newGameBtn.addEventListener('click', resetGame);
-
-// -------------------- Leaderboard (unchanged, shows old ball scores) --------------------
 function showLeaderboard() {
   const q = query(
     collection(db, "scores"),
@@ -282,4 +361,7 @@ function showLeaderboard() {
   });
 }
 
+// Initialize
+resetBall();
+update();
 showLeaderboard();
