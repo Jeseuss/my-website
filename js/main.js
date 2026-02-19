@@ -1,23 +1,5 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  limit, 
-  onSnapshot, 
-  Timestamp 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// Initialize Firebase
+// Firebase Config (use your existing config)
 const firebaseConfig = {
   apiKey: "AIzaSyDtKRlsPmdOMtzY_ESJFq3JiduLPPbz1QQ",
   authDomain: "dbfinal-9fadb.firebaseapp.com",
@@ -26,342 +8,285 @@ const firebaseConfig = {
   messagingSenderId: "980549293595",
   appId: "1:980549293595:web:17876489c9aeea26e78abe"
 };
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
 
-// Audio elements
-const bgMusic = document.getElementById("backgroundMusic");
-const catchSound = document.getElementById("catchSound");
-const missSound = document.getElementById("missSound");
-const musicToggle = document.getElementById("musicToggle");
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-// Music control
-let musicOn = true;
-bgMusic.volume = 0.5;
-
-musicToggle.addEventListener("click", () => {
-  musicOn = !musicOn;
-  musicToggle.textContent = musicOn ? "♪" : "🔇";
-  if (musicOn) {
-    bgMusic.play();
-  } else {
-    bgMusic.pause();
-  }
-});
-
-// Game setup
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-let ballVisible = false;
-let clickFeedback = { active: false, x: 0, y: 0, time: 0 };
-let playerName = "Anonymous"; // Will be set after login
-let score = 0;
-let attemptsLeft = 3;
-let gameActive = false;
-let speedDecayInterval;
-
-// Ball physics
-let ball = { 
-  x: 0, y: 0,
-  r: 15, 
-  color: "blue", 
-  vx: 0, vy: 0,
-  currentSpeed: 100
+// --- GAME DATA ---
+const LOCATIONS = {
+    "Santa Ana": {
+        desc: "The gritty heart of OC. High crime rates, high rewards.",
+        crimes: [
+            { name: "Pickpocket Tourist", energy: 5, nerve: 2, minPay: 10, maxPay: 50, xp: 1, risk: "low" },
+            { name: "Tag a Wall", energy: 5, nerve: 5, minPay: 0, maxPay: 20, xp: 2, risk: "low" },
+            { name: "Shoplift from 7-Eleven", energy: 10, nerve: 10, minPay: 50, maxPay: 150, xp: 5, risk: "med" }
+        ]
+    },
+    "Newport Beach": {
+        desc: "Wealthy coastlines and fancy yachts. Bring your A-game.",
+        crimes: [
+            { name: "Scallop Tickets", energy: 5, nerve: 5, minPay: 50, maxPay: 100, xp: 2, risk: "low" },
+            { name: "Steal a Surfboard", energy: 15, nerve: 15, minPay: 100, maxPay: 300, xp: 8, risk: "med" },
+            { name: "Yacht Heist", energy: 30, nerve: 30, minPay: 500, maxPay: 2000, xp: 25, risk: "high" }
+        ]
+    },
+    "Irvine Spectrum": {
+        desc: "Tech hubs and corporate money. Good for hacking.",
+        crimes: [
+            { name: "Phish for Passwords", energy: 5, nerve: 5, minPay: 20, maxPay: 80, xp: 3, risk: "low" },
+            { name: "Mug a Tech Bro", energy: 20, nerve: 20, minPay: 200, maxPay: 600, xp: 15, risk: "med" }
+        ]
+    }
 };
 
-let BASE_SPEED = 8;
-let SPEED_DECAY_RATE = 1;
+// --- GAME STATE ---
+let playerData = null;
+let playerRef = null; // Reference to Firestore document
 
-const difficulty = {
-  easy: { speed: 6, decay: 0.8 },
-  medium: { speed: 8, decay: 1 }, 
-  hard: { speed: 12, decay: 1.2 }
-};
+// --- AUTH FUNCTIONS ---
 
-let lastFrameTime = performance.now();
-
-// Authentication functions
-async function login(email, password) {
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    alert("Login failed: " + error.message);
-  }
+function toggleAuthMode() {
+    const login = document.getElementById('login-form');
+    const reg = document.getElementById('register-form');
+    login.classList.toggle('hidden');
+    reg.classList.toggle('hidden');
 }
 
-async function signup(email, password) {
-  try {
-    await createUserWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    alert("Signup failed: " + error.message);
-  }
-}
-
-async function logout() {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    alert("Logout failed: " + error.message);
-  }
-}
-
-// Update UI based on auth state
-function updateUI(user) {
-  const loginForm = document.getElementById('login-form');
-  const userInfo = document.getElementById('user-info');
-  const userEmail = document.getElementById('user-email');
-  
-  if (user) {
-    // User is logged in
-    loginForm.style.display = 'none';
-    userInfo.style.display = 'block';
-    userEmail.textContent = user.email;
-    
-    // Enable game elements
-    document.getElementById('difficulty').style.display = 'flex';
-    document.getElementById('game-container').style.display = 'block';
-    document.getElementById('leaderboard').style.display = 'block';
-    
-    // Prompt for player name
-    playerName = prompt("What do your friends call you?") || "Anonymous";
-  } else {
-    // User is logged out
-    loginForm.style.display = 'block';
-    userInfo.style.display = 'none';
-    
-    // Disable game elements
-    document.getElementById('difficulty').style.display = 'none';
-    document.getElementById('game-container').style.display = 'none';
-    document.getElementById('leaderboard').style.display = 'none';
-  }
-}
-
-// Set up auth event listeners
-document.getElementById('login-btn').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  login(email, password);
-});
-
-document.getElementById('signup-btn').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  signup(email, password);
-});
-
-document.getElementById('logout-btn').addEventListener('click', logout);
-
-// Listen for auth state changes
-onAuthStateChanged(auth, (user) => {
-  updateUI(user);
-});
-
-// Start game button
-document.getElementById("startButton").addEventListener("click", startGame);
-
-function startGame() {
-  if (!auth.currentUser) {
-    alert("Please login to play the game!");
-    return;
-  }
-  
-  if (gameActive) return;
-  if (musicOn) {
-    bgMusic.currentTime = 0;
-    bgMusic.play();
-  }
-  
-  const difficultyLevel = document.getElementById("difficultySelect").value;
-  
-  gameActive = true;
-  attemptsLeft = 3;
-  score = 0;
-  ballVisible = true;
-  
-  resetBall();
-  ball.currentSpeed = 100;
-  BASE_SPEED = difficulty[difficultyLevel].speed;
-  SPEED_DECAY_RATE = difficulty[difficultyLevel].decay;
-  
-  do {
-    ball.vx = (Math.random() * 2 - 1) * BASE_SPEED;
-    ball.vy = (Math.random() * 2 - 1) * BASE_SPEED;
-  } while (Math.abs(ball.vx) < 0.5 || Math.abs(ball.vy) < 0.5);
-  
-  if (speedDecayInterval) clearInterval(speedDecayInterval);
-  speedDecayInterval = setInterval(() => {
-    if (gameActive) {
-      ball.currentSpeed = Math.max(20, ball.currentSpeed - SPEED_DECAY_RATE);
-      updateSpeed();
+// Make functions global so HTML buttons can see them
+window.loginUser = async function() {
+    const email = document.getElementById('email').value;
+    const pass = document.getElementById('password').value;
+    try {
+        await auth.signInWithEmailAndPassword(email, pass);
+        // onAuthStateChanged will handle the rest
+    } catch (e) {
+        alert(e.message);
     }
-  }, 1000);
-  
-  lastFrameTime = performance.now();
-  update();
 }
 
-function resetBall() {
-  ball.x = Math.max(ball.r, Math.min(canvas.width - ball.r, Math.random() * canvas.width));
-  ball.y = Math.max(ball.r, Math.min(canvas.height - ball.r, Math.random() * canvas.height));
-  ball.color = getRandomColor();
-  ballVisible = true;
-}
+window.registerUser = async function() {
+    const email = document.getElementById('reg-email').value;
+    const pass = document.getElementById('reg-password').value;
+    const user = document.getElementById('reg-username').value;
 
-function updateSpeed() {
-  const speedFactor = ball.currentSpeed / 100;
-  const directionX = ball.vx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vx);
-  const directionY = ball.vy === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vy);
-  
-  ball.vx = directionX * BASE_SPEED * speedFactor;
-  ball.vy = directionY * BASE_SPEED * speedFactor;
-}
+    if(!user) { alert("Pick a username!"); return; }
 
-function update() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  if (gameActive) {
-    const now = performance.now();
-    const deltaTime = (now - lastFrameTime) / 16;
-    lastFrameTime = now;
-    
-    ball.x += ball.vx * deltaTime;
-    ball.y += ball.vy * deltaTime;
-    
-    if (ball.x < ball.r) {
-      ball.x = ball.r;
-      ball.vx *= -1;
-      ball.color = getRandomColor();
-    } else if (ball.x > canvas.width - ball.r) {
-      ball.x = canvas.width - ball.r;
-      ball.vx *= -1;
-      ball.color = getRandomColor();
+    try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+        // Create a player document in Firestore
+        await db.collection('players').doc(userCredential.user.uid).set({
+            username: user,
+            cash: 100,
+            energy: 100,
+            nerve: 50,
+            xp: 0,
+            level: 1,
+            location: "Santa Ana",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (e) {
+        alert(e.message);
     }
-    
-    if (ball.y < ball.r) {
-      ball.y = ball.r;
-      ball.vy *= -1;
-      ball.color = getRandomColor();
-    } else if (ball.y > canvas.height - ball.r) {
-      ball.y = canvas.height - ball.r;
-      ball.vy *= -1;
-      ball.color = getRandomColor();
-    }
-  }
-  
-  if (ballVisible) {
-    drawBall();
-  }
-  
-  if (clickFeedback.active) {
-    const fade = 1 - (performance.now() - clickFeedback.time) / 500;
-    if (fade > 0) {
-      ctx.beginPath();
-      ctx.arc(clickFeedback.x, clickFeedback.y, 30 * fade, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 0, 0, ${fade})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+}
+
+window.logoutUser = function() {
+    auth.signOut();
+}
+
+// --- GAME LOGIC ---
+
+// Listener for Auth State Changes
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        // User is signed in.
+        const uid = user.uid;
+        playerRef = db.collection('players').doc(uid);
+        
+        // Listen for real-time updates to the player document
+        playerRef.onSnapshot((doc) => {
+            if (doc.exists) {
+                playerData = doc.data();
+                updateUI();
+                showGame();
+            } else {
+                console.log("No such document! Creating one... (should happen on register)");
+            }
+        });
+
     } else {
-      clickFeedback.active = false;
+        // User is signed out.
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('game-container').style.display = 'none';
     }
-  }
-  
-  drawSpeedMeter();
-  requestAnimationFrame(update);
-}
-
-function drawBall() {
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-  ctx.fillStyle = ball.color;
-  ctx.fill();
-}
-
-function drawSpeedMeter() {
-  ctx.fillStyle = "black";
-  ctx.font = "16px Arial";
-  ctx.fillText(`Speed: ${Math.round(ball.currentSpeed)}%`, 20, 30);
-  ctx.fillText(`Attempts: ${attemptsLeft}`, 20, 60);
-}
-
-canvas.addEventListener("click", (e) => {
-  if (!gameActive || !auth.currentUser) return;
-  
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  
-  clickFeedback = {
-    active: true,
-    x: mouseX,
-    y: mouseY,
-    time: performance.now()
-  };
-  
-  const distance = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
-  
-  if (distance <= ball.r * 1.5) {
-    catchSound.currentTime = 0;
-    catchSound.play();
-    score = Math.round(ball.currentSpeed);
-    saveScore(playerName, score);
-    alert(`Caught at ${score}% speed!`);
-    endGame();
-  } else {
-    missSound.currentTime = 0;
-    missSound.play();
-    attemptsLeft--;
-    document.getElementById("score").textContent = `Attempts: ${attemptsLeft}`;
-    
-    if (attemptsLeft <= 0) {
-      alert("Game over!");
-      endGame();
-    }
-  }
 });
 
-function endGame() {
-  bgMusic.pause();
-  gameActive = false;
-  clearInterval(speedDecayInterval);
-  ball.vx = 0;
-  ball.vy = 0;
+function showGame() {
+    document.getElementById('auth-section').style.display = 'none';
+    document.getElementById('game-container').style.display = 'block';
 }
 
-function getRandomColor() {
-  return `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`;
+function updateUI() {
+    if (!playerData) return;
+    
+    document.getElementById('disp-name').innerText = playerData.username;
+    document.getElementById('disp-cash').innerText = "$" + playerData.cash.toLocaleString();
+    document.getElementById('disp-energy').innerText = playerData.energy + "/100";
+    document.getElementById('disp-nerve').innerText = playerData.nerve + "/50";
+    
+    // Update Location
+    const loc = playerData.location;
+    if(LOCATIONS[loc]) {
+        document.getElementById('loc-title').innerText = loc;
+        document.getElementById('loc-desc').innerText = LOCATIONS[loc].desc;
+        renderCrimes(loc);
+    }
 }
 
-async function saveScore(name, score) {
-  if (!auth.currentUser) return;
-  
-  await addDoc(collection(db, "scores"), {
-    name,
-    score,
-    timestamp: Timestamp.now(),
-    userId: auth.currentUser.uid
-  });
-}
+// --- ACTIONS ---
 
-function showLeaderboard() {
-  const q = query(
-    collection(db, "scores"),
-    orderBy("score", "desc"),
-    limit(10)
-  );
-  
-  onSnapshot(q, (snapshot) => {
-    const leaderboard = document.getElementById("scores-list");
-    leaderboard.innerHTML = "";
-    snapshot.forEach((doc) => {
-      const li = document.createElement("li");
-      li.textContent = `${doc.data().name}: ${doc.data().score}`;
-      leaderboard.appendChild(li);
+function switchTab(tab) {
+    const mainMenu = document.getElementById('main-menu');
+    const travelMenu = document.getElementById('travel-menu');
+
+    if(tab === 'crimes') {
+        mainMenu.classList.remove('hidden');
+        travelMenu.classList.add('hidden');
+        renderCrimes(playerData.location);
+    } else if(tab === 'travel') {
+        mainMenu.classList.add('hidden');
+        travelMenu.classList.remove('hidden');
+        renderTravel();
+    }
+}
+window.switchTab = switchTab; // Expose to global
+
+function renderCrimes(locationName) {
+    const container = document.getElementById('main-menu');
+    container.innerHTML = ''; // Clear previous
+    const crimes = LOCATIONS[locationName].crimes;
+
+    crimes.forEach((crime, index) => {
+        const div = document.createElement('div');
+        div.className = 'action-btn';
+        div.innerHTML = `
+            <h4>${crime.name}</h4>
+            <p>Energy: ${crime.energy} | Nerve: ${crime.nerve}</p>
+            <p>Risk: ${crime.risk}</p>
+        `;
+        div.onclick = () => commitCrime(index);
+        container.appendChild(div);
     });
-  });
 }
 
-// Initialize
-resetBall();
-update();
-showLeaderboard();
+function renderTravel() {
+    const container = document.getElementById('travel-menu');
+    container.innerHTML = '';
+    
+    const currentLoc = playerData.location;
+    Object.keys(LOCATIONS).forEach(locName => {
+        if(locName === currentLoc) return; // Don't show current location
+
+        const div = document.createElement('div');
+        div.className = 'action-btn';
+        div.innerHTML = `
+            <h4>Travel to ${locName}</h4>
+            <p>Cost: $50</p>
+        `;
+        div.onclick = () => travelTo(locName);
+        container.appendChild(div);
+    });
+}
+
+// --- CORE MECHANICS ---
+
+window.commitCrime = async function(index) {
+    const loc = playerData.location;
+    const crime = LOCATIONS[loc].crimes[index];
+
+    // 1. Check Requirements
+    if(playerData.energy < crime.energy) return addLog("Not enough energy!", "red");
+    if(playerData.nerve < crime.nerve) return addLog("Not enough nerve!", "red");
+
+    // 2. Determine Outcome (Random % based on risk)
+    let successChance = 90; // Base
+    if(crime.risk === 'med') successChance = 70;
+    if(crime.risk === 'high') successChance = 40;
+
+    const roll = Math.random() * 100;
+
+    // 3. Update Database (Atomic Transaction)
+    try {
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(playerRef);
+            if (!doc.exists) return;
+
+            const data = doc.data();
+            let updates = {
+                energy: data.energy - crime.energy,
+                nerve: data.nerve - crime.nerve
+            };
+
+            if (roll < successChance) {
+                // SUCCESS
+                const payout = Math.floor(Math.random() * (crime.maxPay - crime.minPay + 1)) + crime.minPay;
+                updates.cash = data.cash + payout;
+                updates.xp = data.xp + crime.xp;
+                addLog(`Success! You earned $${payout} and ${crime.xp} XP.`, "green");
+                
+                // Simple Level Up Logic
+                if(updates.xp >= data.level * 100) {
+                    updates.level = data.level + 1;
+                    addLog(`LEVEL UP! You are now level ${updates.level}`, "gold");
+                }
+            } else {
+                // FAILURE
+                addLog(`Failed! You were caught or messed up.`, "red");
+            }
+
+            t.update(playerRef, updates);
+        });
+    } catch (e) {
+        console.error("Transaction failure:", e);
+    }
+}
+
+window.travelTo = async function(destination) {
+    if(playerData.cash < 50) return addLog("Need $50 to travel!", "red");
+    
+    await playerRef.update({
+        location: destination,
+        cash: playerData.cash - 50,
+        energy: playerData.energy - 10 // Travel takes effort
+    });
+    
+    addLog(`Traveled to ${destination}. -$50`, "orange");
+    switchTab('crimes'); // Switch back to crimes tab automatically
+}
+
+function addLog(msg, color = "white") {
+    const log = document.getElementById('game-log');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.style.color = color;
+    entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    log.prepend(entry); // Add to top
+}
+
+// --- UTILITY ---
+// Simple token regeneration (Run this manually in console or set up Cloud Functions)
+// For a local demo, let's just give energy back every minute for playability
+setInterval(() => {
+    if(playerRef && playerData) {
+        let energyGain = 5;
+        let nerveGain = 2;
+        
+        if(playerData.energy < 100 || playerData.nerve < 50) {
+            playerRef.update({
+                energy: Math.min(100, playerData.energy + energyGain),
+                nerve: Math.min(50, playerData.nerve + nerveGain)
+            });
+        }
+    }
+}, 60000); // Every 60 seconds
