@@ -1,306 +1,48 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html class="no-js" lang="">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OC Underground 2026</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* --- CSS STYLES --- */
         :root {
-            --primary: #ff9800; --bg-dark: #121212; --bg-card: #1e1e1e;
-            --text-main: #e0e0e0; --danger: #f44336; --success: #4caf50;
+            --primary: #ff9800; /* Orange County Theme */
+            --secondary: #e65100;
+            --accent: #ffc107;
+            --light: #f8f9fa;
+            --dark: #121212;
+            --card: #1e1e1e;
+            --success: #4caf50;
+            --danger: #f44336;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-dark); color: var(--text-main);
-            margin: 0; display: flex; justify-content: center; min-height: 100vh;
+            background-color: var(--dark);
+            color: var(--light);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
         }
-        #app { width: 100%; max-width: 800px; padding: 20px; box-sizing: border-box; }
         
+        /* Layout */
+        #app {
+            width: 100%;
+            max-width: 800px;
+        }
+
         /* Auth Styles */
-        #auth-container { margin-top: 50px; background: var(--bg-card); padding: 30px; border-radius: 8px; }
-        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #333; background: #2c2c2c; color: white; border-radius: 4px; }
-        button { padding: 10px 20px; background: var(--primary); color: black; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        .hidden { display: none; }
-        .text-center { text-align: center; }
-
-        /* Game Styles */
-        .header {
-            display: flex; justify-content: space-between; background: var(--bg-card);
-            padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid var(--primary);
-            flex-wrap: wrap;
+        #auth-container {
+            background: var(--card);
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 400px;
+            margin: 50px auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
-        .stat-box span { display: block; font-size: 0.9em; color: #aaa; }
-        .stat-box strong { font-size: 1.2em; color: var(--primary); }
-        .main-content { background: var(--bg-card); padding: 20px; border-radius: 8px; min-height: 300px; }
-        .actions { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .action-btn {
-            background: #2c2c2c; border: 1px solid #444; color: white;
-            padding: 15px; text-align: left; cursor: pointer; border-radius: 4px;
-        }
-        .action-btn:hover { background: #333; border-color: var(--primary); }
-        .action-btn h4 { margin: 0 0 5px 0; color: var(--primary); }
-        .action-btn p { margin: 0; font-size: 0.8em; color: #aaa; }
-        #game-log {
-            margin-top: 20px; padding: 10px; background: #000; border-radius: 4px;
-            height: 100px; overflow-y: auto; font-family: monospace; font-size: 0.9em; border: 1px solid #333;
-        }
-    </style>
-</head>
-<body>
-
-    <!-- AUTH SECTION -->
-    <div id="auth-section" class="text-center">
-        <div id="auth-container">
-            <h2>Orange County 2026</h2>
-            <p style="color:#aaa">The Text RPG</p>
-            
-            <div id="login-form">
-                <h3>Login</h3>
-                <input type="email" id="email" placeholder="Email">
-                <input type="password" id="password" placeholder="Password">
-                <button id="login-btn">Login</button>
-                <p style="font-size:0.8em; cursor:pointer; color:#aaa" id="show-register">Need an account? Register</p>
-            </div>
-
-            <div id="register-form" class="hidden">
-                <h3>Register</h3>
-                <input type="text" id="reg-username" placeholder="Username">
-                <input type="email" id="reg-email" placeholder="Email">
-                <input type="password" id="reg-password" placeholder="Password">
-                <button id="signup-btn">Create Character</button>
-                <p style="font-size:0.8em; cursor:pointer; color:#aaa" id="show-login">Have an account? Login</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- GAME SECTION -->
-    <div id="game-container" class="hidden">
-        <!-- Header HUD -->
-        <div class="header">
-            <div class="stat-box"><span>Player</span><strong id="disp-name">Loading...</strong></div>
-            <div class="stat-box"><span>Energy</span><strong id="disp-energy">0/100</strong></div>
-            <div class="stat-box"><span>Nerve</span><strong id="disp-nerve">0/50</strong></div>
-            <div class="stat-box"><span>Cash</span><strong id="disp-cash">$0</strong></div>
-        </div>
-
-        <!-- Main Game Area -->
-        <div class="main-content">
-            <h3 id="loc-title">Santa Ana</h3>
-            <p id="loc-desc" style="color:#aaa; margin-bottom:20px;">Loading location...</p>
-            
-            <div id="actions-container" class="actions">
-                <!-- Buttons populated by JS -->
-            </div>
-        </div>
-
-        <div style="margin-top:10px;">
-            <button id="logout-btn" style="background:#555; float:right;">Logout</button>
-        </div>
-
-        <!-- Game Log -->
-        <div id="game-log"></div>
-    </div>
-
-    <!-- Firebase Modular Imports -->
-    <script type="module">
-        // --- FIREBASE INITIALIZATION (YOUR CONFIG) ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDtKRlsPmdOMtzY_ESJFq3JiduLPPbz1QQ",
-            authDomain: "dbfinal-9fadb.firebaseapp.com",
-            projectId: "dbfinal-9fadb",
-            storageBucket: "dbfinal-9fadb.appspot.com",
-            messagingSenderId: "980549293595",
-            appId: "1:980549293595:web:17876489c9aeea26e78abe"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // --- GAME DATA ---
-        const LOCATIONS = {
-            "Santa Ana": {
-                desc: "The gritty heart of OC. High crime rates, high rewards.",
-                crimes: [
-                    { name: "Pickpocket Tourist", energy: 5, nerve: 2, minPay: 10, maxPay: 50, risk: "low" },
-                    { name: "Shoplift 7-Eleven", energy: 10, nerve: 10, minPay: 50, maxPay: 150, risk: "med" }
-                ]
-            },
-            "Newport Beach": {
-                desc: "Wealthy coastlines and fancy yachts.",
-                crimes: [
-                    { name: "Scallop Tickets", energy: 5, nerve: 5, minPay: 50, maxPay: 100, risk: "low" },
-                    { name: "Yacht Heist", energy: 30, nerve: 30, minPay: 500, maxPay: 2000, risk: "high" }
-                ]
-            }
-        };
-
-        let playerData = null;
-        let playerRef = null;
-        let unsubListener = null;
-
-        // --- UI HELPERS ---
-        const el = (id) => document.getElementById(id);
-
-        function toggleAuth(showRegister) {
-            el('login-form').classList.toggle('hidden', showRegister);
-            el('register-form').classList.toggle('hidden', !showRegister);
-        }
-
-        el('show-register').addEventListener('click', () => toggleAuth(true));
-        el('show-login').addEventListener('click', () => toggleAuth(false));
-
-        // --- AUTH LOGIC ---
-        el('login-btn').addEventListener('click', async () => {
-            const email = el('email').value;
-            const pass = el('password').value;
-            try { await signInWithEmailAndPassword(auth, email, pass); } 
-            catch (e) { alert(e.message); }
-        });
-
-        el('signup-btn').addEventListener('click', async () => {
-            const email = el('reg-email').value;
-            const pass = el('reg-password').value;
-            const user = el('reg-username').value;
-            if(!user) { alert("Enter a username"); return; }
-
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-                // Create initial player document
-                await setDoc(doc(db, "players", userCredential.user.uid), {
-                    username: user,
-                    cash: 100,
-                    energy: 100,
-                    nerve: 50,
-                    xp: 0,
-                    level: 1,
-                    location: "Santa Ana",
-                    createdAt: Timestamp.now()
-                });
-            } catch (e) { alert(e.message); }
-        });
-
-        el('logout-btn').addEventListener('click', () => signOut(auth));
-
-        // --- MAIN GAME STATE LISTENER ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // User is logged in
-                el('auth-section').classList.add('hidden');
-                el('game-container').classList.remove('hidden');
-                
-                // Reference to the player's document
-                playerRef = doc(db, "players", user.uid);
-
-                // Listen for real-time updates
-                if (unsubListener) unsubListener(); // Clear previous listener if exists
-                unsubListener = onSnapshot(playerRef, (doc) => {
-                    if (doc.exists) {
-                        playerData = doc.data();
-                        updateGameUI();
-                    }
-                });
-
-            } else {
-                // User is logged out
-                el('auth-section').classList.remove('hidden');
-                el('game-container').classList.add('hidden');
-                if (unsubListener) unsubListener();
-            }
-        });
-
-        // --- GAME RENDERING ---
-        function updateGameUI() {
-            if (!playerData) return;
-            
-            el('disp-name').innerText = playerData.username;
-            el('disp-cash').innerText = "$" + playerData.cash.toLocaleString();
-            el('disp-energy').innerText = playerData.energy + "/100";
-            el('disp-nerve').innerText = playerData.nerve + "/50";
-
-            renderLocation();
-        }
-
-        function renderLocation() {
-            const loc = playerData.location;
-            const data = LOCATIONS[loc];
-            
-            el('loc-title').innerText = loc;
-            el('loc-desc').innerText = data.desc;
-
-            const container = el('actions-container');
-            container.innerHTML = ''; // Clear
-
-            // Render Crimes
-            data.crimes.forEach((crime, index) => {
-                const btn = document.createElement('div');
-                btn.className = 'action-btn';
-                btn.innerHTML = `<h4>${crime.name}</h4><p>Energy: ${crime.energy} | Nerve: ${crime.nerve}</p>`;
-                btn.addEventListener('click', () => doCrime(index));
-                container.appendChild(btn);
-            });
-
-            // Render Travel Button
-            const travelBtn = document.createElement('div');
-            travelBtn.className = 'action-btn';
-            travelBtn.innerHTML = `<h4>Travel to Airport</h4><p>Cost: $50</p>`;
-            travelBtn.addEventListener('click', travel);
-            container.appendChild(travelBtn);
-        }
-
-        function addLog(msg) {
-            const log = el('game-log');
-            const entry = document.createElement('div');
-            entry.innerText = `> ${msg}`;
-            log.prepend(entry);
-        }
-
-        // --- GAME ACTIONS ---
-        async function doCrime(index) {
-            const loc = playerData.location;
-            const crime = LOCATIONS[loc].crimes[index];
-
-            if (playerData.energy < crime.energy) { alert("Not enough energy!"); return; }
-            if (playerData.nerve < crime.nerve) { alert("Not enough nerve!"); return; }
-
-            // Simple Success Logic
-            let successChance = crime.risk === 'high' ? 40 : crime.risk === 'med' ? 70 : 90;
-            const roll = Math.floor(Math.random() * 100);
-
-            let updates = {
-                energy: playerData.energy - crime.energy,
-                nerve: playerData.nerve - crime.nerve
-            };
-
-            if (roll < successChance) {
-                const payout = Math.floor(Math.random() * (crime.maxPay - crime.minPay)) + crime.minPay;
-                updates.cash = playerData.cash + payout;
-                addLog(`SUCCESS: ${crime.name}. Earned $${payout}!`);
-            } else {
-                addLog(`FAILED: ${crime.name}. You messed up.`);
-            }
-
-            await updateDoc(playerRef, updates);
-        }
-
-        async function travel() {
-            // Simple toggle travel for demo
-            const newLoc = playerData.location === "Santa Ana" ? "Newport Beach" : "Santa Ana";
-            if (playerData.cash < 50) { alert("Need $50 to travel"); return; }
-            
-            await updateDoc(playerRef, {
-                location: newLoc,
-                cash: playerData.cash - 50
-            });
-            addLog(`Traveled to ${newLoc}.`);
-        }
-
-    </script>
-</body>
-</html>
+        input {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px|
