@@ -5,203 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OC Underground 2026</title>
     <style>
+        /* --- CSS STYLES --- */
         :root {
-            --primary: #ff9800; /* Orange County theme */
-            --bg-dark: #121212;
-            --bg-card: #1e1e1e;
-            --text-main: #e0e0e0;
-            --danger: #f44336;
-            --success: #4caf50;
+            --primary: #ff9800; --bg-dark: #121212; --bg-card: #1e1e1e;
+            --text-main: #e0e0e0; --danger: #f44336; --success: #4caf50;
         }
-
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            min-height: 100vh;
+            background-color: var(--bg-dark); color: var(--text-main);
+            margin: 0; display: flex; justify-content: center; min-height: 100vh;
         }
-
-        /* UI Container */
-        #app {
-            width: 100%;
-            max-width: 800px;
-            padding: 20px;
-        }
-
-        /* Auth Screens */
-        .auth-container {
-            margin-top: 50px;
-            background: var(--bg-card);
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        input {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #333;
-            background: #2c2c2c;
-            color: white;
-            border-radius: 4px;
-        }
-        button {
-            padding: 10px 20px;
-            background: var(--primary);
-            color: black;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:disabled {
-            background: #555;
-            cursor: not-allowed;
-        }
-
-        /* Game UI */
-        #game-container {
-            display: none; /* Hidden until login */
-        }
-
-        /* Header Stats */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            background: var(--bg-card);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid var(--primary);
-        }
-        .stat-box span { display: block; font-size: 0.9em; color: #aaa; }
-        .stat-box strong { font-size: 1.2em; color: var(--primary); }
-
-        /* Main Content */
-        .main-content {
-            background: var(--bg-card);
-            padding: 20px;
-            border-radius: 8px;
-            min-height: 300px;
-        }
+        #app { width: 100%; max-width: 800px; padding: 20px; box-sizing: border-box; }
         
-        /* Action Buttons */
-        .actions {
-            margin-top: 20px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-        .action-btn {
-            background: #2c2c2c;
-            border: 1px solid #444;
-            color: white;
-            padding: 15px;
-            text-align: left;
-        }
-        .action-btn:hover { background: #333; border-color: var(--primary); }
-        .action-btn h4 { margin: 0 0 5px 0; color: var(--primary); }
-        .action-btn p { margin: 0; font-size: 0.8em; color: #aaa; }
-
-        /* Log */
-        #game-log {
-            margin-top: 20px;
-            padding: 10px;
-            background: #000;
-            border-radius: 4px;
-            height: 100px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.9em;
-            border: 1px solid #333;
-        }
-        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 2px; }
-        
+        /* Auth Styles */
+        #auth-container { margin-top: 50px; background: var(--bg-card); padding: 30px; border-radius: 8px; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #333; background: #2c2c2c; color: white; border-radius: 4px; }
+        button { padding: 10px 20px; background: var(--primary); color: black; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #555; cursor: not-allowed; }
         .hidden { display: none; }
         .text-center { text-align: center; }
-    </style>
-</head>
-<body>
 
-    <!-- LOGIN SCREEN -->
-    <div id="auth-section" class="auth-container">
-        <h2 class="text-center">Orange County 2026</h2>
-        <p class="text-center" style="color:#aaa">The text-based MMORPG</p>
-        
-        <div id="login-form">
-            <h3>Login</h3>
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
-            <button onclick="loginUser()">Login</button>
-            <p style="font-size:0.8em; cursor:pointer" onclick="toggleAuthMode()">Need an account? Register here.</p>
-        </div>
-        
-        <div id="register-form" class="hidden">
-            <h3>Register</h3>
-            <input type="text" id="reg-username" placeholder="Username">
-            <input type="email" id="reg-email" placeholder="Email">
-            <input type="password" id="reg-password" placeholder="Password">
-            <button onclick="registerUser()">Create Criminal</button>
-            <p style="font-size:0.8em; cursor:pointer" onclick="toggleAuthMode()">Have an account? Login here.</p>
-        </div>
-    </div>
-
-    <!-- GAME SCREEN -->
-    <div id="game-container">
-        <!-- Header HUD -->
-        <div class="header">
-            <div class="stat-box">
-                <span>Player</span>
-                <strong id="disp-name">Loading...</strong>
-            </div>
-            <div class="stat-box">
-                <span>Energy</span>
-                <strong id="disp-energy">0/100</strong>
-            </div>
-            <div class="stat-box">
-                <span>Nerve</span>
-                <strong id="disp-nerve">0/50</strong>
-            </div>
-            <div class="stat-box">
-                <span>Cash</span>
-                <strong id="disp-cash">$0</strong>
-            </div>
-        </div>
-
-        <!-- Location & Main Area -->
-        <div class="main-content">
-            <h3 id="loc-title">Downtown Santa Ana</h3>
-            <p id="loc-desc">The streets are slick with ocean mist and neon light.</p>
-            
-            <div id="main-menu" class="actions">
-                <!-- Crimes populated by JS -->
-            </div>
-
-            <div id="travel-menu" class="actions hidden">
-                <!-- Travel options populated by JS -->
-            </div>
-        </div>
-
-        <!-- Navigation Tabs -->
-        <div style="margin-top:10px; display:flex; gap:10px;">
-            <button id="tab-crimes" onclick="switchTab('crimes')">Crimes</button>
-            <button id="tab-travel" onclick="switchTab('travel')">Travel</button>
-            <button onclick="logoutUser()" style="background:#555; margin-left:auto;">Logout</button>
-        </div>
-
-        <!-- Game Log -->
-        <div id="game-log"></div>
-    </div>
-
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-    <!-- Game Logic -->
-    <script src="main.js"></script>
-</body>
-</html>
+        /* Game Styles */
+        .header {
+            display: flex; justify-content: space-between; background: var(--bg-card);
+            padding: 15px; border-radius: 8px; margin-bottom|
