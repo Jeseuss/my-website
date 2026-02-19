@@ -1,367 +1,241 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  limit, 
-  onSnapshot, 
-  Timestamp 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-// Initialize Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyDtKRlsPmdOMtzY_ESJFq3JiduLPPbz1QQ",
-  authDomain: "dbfinal-9fadb.firebaseapp.com",
-  projectId: "dbfinal-9fadb",
-  storageBucket: "dbfinal-9fadb.appspot.com",
-  messagingSenderId: "980549293595",
-  appId: "1:980549293595:web:17876489c9aeea26e78abe"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// Audio elements
-const bgMusic = document.getElementById("backgroundMusic");
-const catchSound = document.getElementById("catchSound");
-const missSound = document.getElementById("missSound");
-const musicToggle = document.getElementById("musicToggle");
-
-// Music control
-let musicOn = true;
-bgMusic.volume = 0.5;
-
-musicToggle.addEventListener("click", () => {
-  musicOn = !musicOn;
-  musicToggle.textContent = musicOn ? "♪" : "🔇";
-  if (musicOn) {
-    bgMusic.play();
-  } else {
-    bgMusic.pause();
-  }
-});
-
-// Game setup
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-let ballVisible = false;
-let clickFeedback = { active: false, x: 0, y: 0, time: 0 };
-let playerName = "Anonymous"; // Will be set after login
-let score = 0;
-let attemptsLeft = 3;
-let gameActive = false;
-let speedDecayInterval;
-
-// Ball physics
-let ball = { 
-  x: 0, y: 0,
-  r: 15, 
-  color: "blue", 
-  vx: 0, vy: 0,
-  currentSpeed: 100
-};
-
-let BASE_SPEED = 8;
-let SPEED_DECAY_RATE = 1;
-
-const difficulty = {
-  easy: { speed: 6, decay: 0.8 },
-  medium: { speed: 8, decay: 1 }, 
-  hard: { speed: 12, decay: 1.2 }
-};
-
-let lastFrameTime = performance.now();
-
-// Authentication functions
-async function login(email, password) {
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    alert("Login failed: " + error.message);
-  }
-}
-
-async function signup(email, password) {
-  try {
-    await createUserWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    alert("Signup failed: " + error.message);
-  }
-}
-
-async function logout() {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    alert("Logout failed: " + error.message);
-  }
-}
-
-// Update UI based on auth state
-function updateUI(user) {
-  const loginForm = document.getElementById('login-form');
-  const userInfo = document.getElementById('user-info');
-  const userEmail = document.getElementById('user-email');
-  
-  if (user) {
-    // User is logged in
-    loginForm.style.display = 'none';
-    userInfo.style.display = 'block';
-    userEmail.textContent = user.email;
-    
-    // Enable game elements
-    document.getElementById('difficulty').style.display = 'flex';
-    document.getElementById('game-container').style.display = 'block';
-    document.getElementById('leaderboard').style.display = 'block';
-    
-    // Prompt for player name
-    playerName = prompt("What do your friends call you?") || "Anonymous";
-  } else {
-    // User is logged out
-    loginForm.style.display = 'block';
-    userInfo.style.display = 'none';
-    
-    // Disable game elements
-    document.getElementById('difficulty').style.display = 'none';
-    document.getElementById('game-container').style.display = 'none';
-    document.getElementById('leaderboard').style.display = 'none';
-  }
-}
-
-// Set up auth event listeners
-document.getElementById('login-btn').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  login(email, password);
-});
-
-document.getElementById('signup-btn').addEventListener('click', () => {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  signup(email, password);
-});
-
-document.getElementById('logout-btn').addEventListener('click', logout);
-
-// Listen for auth state changes
-onAuthStateChanged(auth, (user) => {
-  updateUI(user);
-});
-
-// Start game button
-document.getElementById("startButton").addEventListener("click", startGame);
-
-function startGame() {
-  if (!auth.currentUser) {
-    alert("Please login to play the game!");
-    return;
-  }
-  
-  if (gameActive) return;
-  if (musicOn) {
-    bgMusic.currentTime = 0;
-    bgMusic.play();
-  }
-  
-  const difficultyLevel = document.getElementById("difficultySelect").value;
-  
-  gameActive = true;
-  attemptsLeft = 3;
-  score = 0;
-  ballVisible = true;
-  
-  resetBall();
-  ball.currentSpeed = 100;
-  BASE_SPEED = difficulty[difficultyLevel].speed;
-  SPEED_DECAY_RATE = difficulty[difficultyLevel].decay;
-  
-  do {
-    ball.vx = (Math.random() * 2 - 1) * BASE_SPEED;
-    ball.vy = (Math.random() * 2 - 1) * BASE_SPEED;
-  } while (Math.abs(ball.vx) < 0.5 || Math.abs(ball.vy) < 0.5);
-  
-  if (speedDecayInterval) clearInterval(speedDecayInterval);
-  speedDecayInterval = setInterval(() => {
-    if (gameActive) {
-      ball.currentSpeed = Math.max(20, ball.currentSpeed - SPEED_DECAY_RATE);
-      updateSpeed();
-    }
-  }, 1000);
-  
-  lastFrameTime = performance.now();
-  update();
-}
-
-function resetBall() {
-  ball.x = Math.max(ball.r, Math.min(canvas.width - ball.r, Math.random() * canvas.width));
-  ball.y = Math.max(ball.r, Math.min(canvas.height - ball.r, Math.random() * canvas.height));
-  ball.color = getRandomColor();
-  ballVisible = true;
-}
-
-function updateSpeed() {
-  const speedFactor = ball.currentSpeed / 100;
-  const directionX = ball.vx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vx);
-  const directionY = ball.vy === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ball.vy);
-  
-  ball.vx = directionX * BASE_SPEED * speedFactor;
-  ball.vy = directionY * BASE_SPEED * speedFactor;
-}
-
-function update() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  if (gameActive) {
-    const now = performance.now();
-    const deltaTime = (now - lastFrameTime) / 16;
-    lastFrameTime = now;
-    
-    ball.x += ball.vx * deltaTime;
-    ball.y += ball.vy * deltaTime;
-    
-    if (ball.x < ball.r) {
-      ball.x = ball.r;
-      ball.vx *= -1;
-      ball.color = getRandomColor();
-    } else if (ball.x > canvas.width - ball.r) {
-      ball.x = canvas.width - ball.r;
-      ball.vx *= -1;
-      ball.color = getRandomColor();
+<!doctype html>
+<html class="no-js" lang="">
+<head>
+  <meta charset="UTF-8">
+  <title>Speed Catch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --accent: #4895ef;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --success: #4cc9f0;
+      --danger: #f72585;
     }
     
-    if (ball.y < ball.r) {
-      ball.y = ball.r;
-      ball.vy *= -1;
-      ball.color = getRandomColor();
-    } else if (ball.y > canvas.height - ball.r) {
-      ball.y = canvas.height - ball.r;
-      ball.vy *= -1;
-      ball.color = getRandomColor();
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      color: var(--dark);
     }
-  }
-  
-  if (ballVisible) {
-    drawBall();
-  }
-  
-  if (clickFeedback.active) {
-    const fade = 1 - (performance.now() - clickFeedback.time) / 500;
-    if (fade > 0) {
-      ctx.beginPath();
-      ctx.arc(clickFeedback.x, clickFeedback.y, 30 * fade, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 0, 0, ${fade})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    } else {
-      clickFeedback.active = false;
-    }
-  }
-  
-  drawSpeedMeter();
-  requestAnimationFrame(update);
-}
-
-function drawBall() {
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-  ctx.fillStyle = ball.color;
-  ctx.fill();
-}
-
-function drawSpeedMeter() {
-  ctx.fillStyle = "black";
-  ctx.font = "16px Arial";
-  ctx.fillText(`Speed: ${Math.round(ball.currentSpeed)}%`, 20, 30);
-  ctx.fillText(`Attempts: ${attemptsLeft}`, 20, 60);
-}
-
-canvas.addEventListener("click", (e) => {
-  if (!gameActive || !auth.currentUser) return;
-  
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  
-  clickFeedback = {
-    active: true,
-    x: mouseX,
-    y: mouseY,
-    time: performance.now()
-  };
-  
-  const distance = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
-  
-  if (distance <= ball.r * 1.5) {
-    catchSound.currentTime = 0;
-    catchSound.play();
-    score = Math.round(ball.currentSpeed);
-    saveScore(playerName, score);
-    alert(`Caught at ${score}% speed!`);
-    endGame();
-  } else {
-    missSound.currentTime = 0;
-    missSound.play();
-    attemptsLeft--;
-    document.getElementById("score").textContent = `Attempts: ${attemptsLeft}`;
     
-    if (attemptsLeft <= 0) {
-      alert("Game over!");
-      endGame();
+    #game-container {
+      background: white;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      text-align: center;
     }
-  }
-});
+    
+    h1 {
+      color: var(--primary);
+      margin-bottom: 20px;
+      font-size: 2.5rem;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    #difficulty {
+      margin: 20px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #difficulty label {
+      font-weight: bold;
+      color: var(--secondary);
+    }
+    
+    #difficultySelect {
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: 2px solid var(--accent);
+      background: white;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    #difficultySelect:hover {
+      border-color: var(--primary);
+    }
+    
+    #startButton {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin: 15px 0;
+    }
+    
+    #startButton:hover {
+      background: var(--secondary);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    #startButton:active {
+      transform: translateY(0);
+    }
+    
+    #gameCanvas {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #e0e0e0;
+    }
+    
+    #score {
+      font-size: 1.2rem;
+      margin: 15px 0;
+      font-weight: bold;
+      color: var(--secondary);
+    }
+    
+    #leaderboard {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 30px auto;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+    }
+    
+    #leaderboard h2 {
+      color: var(--primary);
+      margin-top: 0;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 10px;
+    }
+    
+    #scores-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    #scores-list li {
+      padding: 8px 12px;
+      margin: 5px 0;
+      background: rgba(67, 97, 238, 0.1);
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    #scores-list li:nth-child(odd) {
+      background: rgba(67, 97, 238, 0.05);
+    }
 
-function endGame() {
-  bgMusic.pause();
-  gameActive = false;
-  clearInterval(speedDecayInterval);
-  ball.vx = 0;
-  ball.vy = 0;
-}
+    #musicToggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    }
 
-function getRandomColor() {
-  return `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`;
-}
+    #musicToggle {
+    transition: all 0.3s ease;
+    }
 
-async function saveScore(name, score) {
-  if (!auth.currentUser) return;
-  
-  await addDoc(collection(db, "scores"), {
-    name,
-    score,
-    timestamp: Timestamp.now(),
-    userId: auth.currentUser.uid
-  });
-}
+    #musicToggle:hover {
+      transform: scale(1.1);
+    }
+    
+    @media (max-width: 600px) {
+      #game-container {
+        padding: 20px;
+      }
+      
+      #gameCanvas {
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+</head>
 
-function showLeaderboard() {
-  const q = query(
-    collection(db, "scores"),
-    orderBy("score", "desc"),
-    limit(10)
-  );
-  
-  onSnapshot(q, (snapshot) => {
-    const leaderboard = document.getElementById("scores-list");
-    leaderboard.innerHTML = "";
-    snapshot.forEach((doc) => {
-      const li = document.createElement("li");
-      li.textContent = `${doc.data().name}: ${doc.data().score}`;
-      leaderboard.appendChild(li);
-    });
-  });
-}
+<body>
+  <body>
+    <!-- Add this login section at the top -->
+    <div id="auth-container" style="max-width: 400px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+      <h2 style="color: var(--primary); text-align: center;">Login</h2>
+      <div id="login-form">
+        <input type="email" id="email" placeholder="Email" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+        <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+        <button id="login-btn" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer;">Login</button>
+        <button id="signup-btn" style="width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">Sign Up</button>
+      </div>
+      <div id="user-info" style="display: none; text-align: center;">
+        <p>Logged in as: <span id="user-email"></span></p>
+        <button id="logout-btn" style="padding: 8px 15px; background: var(--danger); color: white; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
+      </div>
+    </div>
 
-// Initialize
-resetBall();
-update();
-showLeaderboard();
+  <div id="difficulty">
+    <label>Difficulty: </label>
+    <select id="difficultySelect">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
+
+  <!-- Game UI -->
+  <div id="game-container">
+    <h1>Speed Catch</h1>
+    <button id="startButton">Start Game</button>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <div id="score">Attempts: 3</div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div id="leaderboard">
+    <h2>Top Players</h2>
+    <ol id="scores-list"></ol>
+  </div>
+
+  <!-- Load your game script as module -->
+  <script type="module" src="js/main.js"></script>
+
+  <!-- Audio Elements -->
+<audio id="backgroundMusic" loop>
+  <source src="audio/background.mp3" type="audio/mpeg">
+</audio>
+<audio id="catchSound">
+  <source src="audio/miss.wav" type="audio/mpeg">
+</audio>
+<audio id="missSound">
+  <source src="audio/catch.wav" type="audio/mpeg">
+</audio>
+<button id="musicToggle">♪</button>
+</body>
+</html>
