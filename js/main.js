@@ -85,7 +85,7 @@ onAuthStateChanged(auth, updateUI);
 
 // -------------------- Groq Text Adventure --------------------
 // 🔑 HARDCODE YOUR API KEY HERE (starts with gsk_...)
-const GROQ_API_KEY = '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';   // <-- replace with your actual key
+const GROQ_API_KEY = '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';   // <-- replace with your actual key
 
 // DOM elements
 const outputDiv = document.getElementById('adventure-output');
