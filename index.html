@@ -1,48 +1,891 @@
 <!doctype html>
-<html class="no-js" lang="">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>OC Underground 2026</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        :root {
-            --primary: #ff9800; /* Orange County Theme */
-            --secondary: #e65100;
-            --accent: #ffc107;
-            --light: #f8f9fa;
-            --dark: #121212;
-            --card: #1e1e1e;
-            --success: #4caf50;
-            --danger: #f44336;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--dark);
-            color: var(--light);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        
-        /* Layout */
-        #app {
-            width: 100%;
-            max-width: 800px;
-        }
+  <meta charset="UTF-8">
+  <title>Orange County Underground — 1990</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --neon-orange: #ff6b00;
+      --neon-teal: #00f5d4;
+      --neon-pink: #ff006e;
+      --neon-yellow: #ffbe0b;
+      --bg-dark: #0a0a0f;
+      --bg-panel: #0f0f1a;
+      --bg-card: #13131f;
+      --border: #1e1e30;
+      --text-main: #c8c8d8;
+      --text-dim: #5a5a7a;
+      --text-bright: #e8e8f8;
+      --success: #00f5d4;
+      --danger: #ff006e;
+    }
 
-        /* Auth Styles */
-        #auth-container {
-            background: var(--card);
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 400px;
-            margin: 50px auto;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        }
-        input {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px|
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      background-image: 
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(255,107,0,0.015) 2px,
+          rgba(255,107,0,0.015) 4px
+        );
+    }
+
+    /* Scanlines overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.08) 0px,
+        rgba(0,0,0,0.08) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ─── AUTH ─── */
+    #auth-screen {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-logo {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: flicker 4s infinite;
+    }
+
+    @keyframes flicker {
+      0%, 95%, 100% { opacity: 1; }
+      96% { opacity: 0.6; }
+      97% { opacity: 1; }
+      98% { opacity: 0.7; }
+      99% { opacity: 1; }
+    }
+
+    .auth-logo h1 {
+      font-family: 'VT323', monospace;
+      font-size: 5rem;
+      color: var(--neon-orange);
+      text-shadow: 0 0 20px var(--neon-orange), 0 0 40px rgba(255,107,0,0.4);
+      line-height: 1;
+      letter-spacing: 4px;
+    }
+
+    .auth-logo .subtitle {
+      font-family: 'VT323', monospace;
+      font-size: 1.8rem;
+      color: var(--neon-teal);
+      text-shadow: 0 0 10px var(--neon-teal);
+      letter-spacing: 8px;
+      margin-top: 4px;
+    }
+
+    .auth-logo .tagline {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .auth-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--neon-orange);
+      border-radius: 4px;
+      padding: 32px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 0 30px rgba(255,107,0,0.15), inset 0 0 20px rgba(0,0,0,0.5);
+    }
+
+    .auth-box h2 {
+      font-family: 'VT323', monospace;
+      font-size: 1.6rem;
+      color: var(--neon-orange);
+      text-align: center;
+      margin-bottom: 20px;
+      letter-spacing: 4px;
+    }
+
+    .auth-box input {
+      width: 100%;
+      background: #0a0a15;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--neon-teal);
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .auth-box input:focus { border-color: var(--neon-orange); }
+    .auth-box input::placeholder { color: var(--text-dim); }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 3px;
+      font-family: 'VT323', monospace;
+      font-size: 1.3rem;
+      letter-spacing: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .btn-primary {
+      background: var(--neon-orange);
+      color: #000;
+    }
+    .btn-primary:hover { background: #ff8533; box-shadow: 0 0 15px rgba(255,107,0,0.5); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--neon-teal);
+      border: 1px solid var(--neon-teal);
+      margin-top: 8px;
+    }
+    .btn-secondary:hover { background: rgba(0,245,212,0.1); box-shadow: 0 0 10px rgba(0,245,212,0.2); }
+
+    .btn-danger {
+      background: var(--neon-pink);
+      color: #fff;
+      width: auto;
+      padding: 6px 16px;
+      font-size: 1rem;
+    }
+    .btn-danger:hover { box-shadow: 0 0 10px rgba(255,0,110,0.5); }
+
+    /* ─── MAIN GAME LAYOUT ─── */
+    #game-screen {
+      display: none;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* Header */
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-bottom-color: var(--neon-orange);
+      margin-bottom: 16px;
+      border-radius: 4px 4px 0 0;
+    }
+
+    .game-header .logo {
+      font-family: 'VT323', monospace;
+      font-size: 2rem;
+      color: var(--neon-orange);
+      text-shadow: 0 0 10px var(--neon-orange);
+      letter-spacing: 3px;
+    }
+
+    .game-header .logo span { color: var(--neon-teal); }
+
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .header-user strong { color: var(--neon-yellow); }
+
+    /* Grid Layout */
+    .game-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr 220px;
+      gap: 12px;
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      background: rgba(255,107,0,0.1);
+      border-bottom: 1px solid var(--neon-orange);
+      padding: 8px 14px;
+      font-family: 'VT323', monospace;
+      font-size: 1.1rem;
+      color: var(--neon-orange);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .panel-body { padding: 14px; }
+
+    /* Stat bars */
+    .stat-row {
+      margin-bottom: 12px;
+    }
+
+    .stat-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .stat-label span { color: var(--text-bright); font-size: 0.8rem; }
+
+    .stat-bar {
+      height: 8px;
+      background: #1a1a2e;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .stat-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .health-fill { background: linear-gradient(90deg, #ff006e, #ff4d8a); box-shadow: 0 0 8px rgba(255,0,110,0.5); }
+    .energy-fill { background: linear-gradient(90deg, #00f5d4, #00bfa5); box-shadow: 0 0 8px rgba(0,245,212,0.4); }
+    .nerve-fill  { background: linear-gradient(90deg, #ffbe0b, #ff9500); box-shadow: 0 0 8px rgba(255,190,11,0.4); }
+
+    /* Money */
+    .money-display {
+      font-family: 'VT323', monospace;
+      font-size: 2rem;
+      color: var(--neon-yellow);
+      text-align: center;
+      text-shadow: 0 0 10px rgba(255,190,11,0.4);
+      padding: 8px 0;
+    }
+
+    .money-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-align: center;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    /* Combat stats */
+    .combat-stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .combat-stat:last-child { border-bottom: none; }
+    .combat-stat .val { color: var(--neon-teal); font-family: 'VT323', monospace; font-size: 1rem; }
+
+    /* Navigation */
+    .nav-btn {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-main);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 1px;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+      background: rgba(255,107,0,0.1);
+      color: var(--neon-orange);
+      padding-left: 20px;
+    }
+
+    .nav-btn .icon { margin-right: 10px; }
+    .nav-btn:last-child { border-bottom: none; }
+
+    /* Main content area */
+    .content-area {
+      min-height: 500px;
+    }
+
+    /* Page: sections */
+    .game-page { display: none; }
+    .game-page.active { display: block; }
+
+    /* Actions grid */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .action-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .action-card:hover {
+      border-color: var(--neon-orange);
+      box-shadow: 0 0 15px rgba(255,107,0,0.1);
+      transform: translateY(-1px);
+    }
+
+    .action-card .ac-icon {
+      font-size: 2rem;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .action-card .ac-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.95rem;
+      color: var(--text-bright);
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    .action-card .ac-desc {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .action-card .ac-cost {
+      margin-top: 8px;
+      font-size: 0.7rem;
+      color: var(--neon-yellow);
+    }
+
+    /* Crime result feed */
+    .event-log {
+      background: #080810;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      height: 160px;
+      overflow-y: auto;
+      padding: 10px;
+      font-size: 0.75rem;
+      line-height: 1.8;
+    }
+
+    .event-log::-webkit-scrollbar { width: 4px; }
+    .event-log::-webkit-scrollbar-track { background: var(--bg-dark); }
+    .event-log::-webkit-scrollbar-thumb { background: var(--neon-orange); border-radius: 2px; }
+
+    .log-entry { color: var(--text-dim); }
+    .log-entry .ts { color: #3a3a5a; margin-right: 8px; }
+    .log-entry .success { color: var(--neon-teal); }
+    .log-entry .fail { color: var(--neon-pink); }
+    .log-entry .info { color: var(--neon-yellow); }
+
+    /* Player search / fight */
+    .player-list .pl-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .player-list .pl-item:hover { background: rgba(255,107,0,0.05); }
+
+    .pl-name {
+      font-size: 0.85rem;
+      color: var(--text-bright);
+    }
+
+    .pl-stats {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .fight-btn {
+      padding: 5px 12px;
+      background: var(--neon-pink);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      font-family: 'VT323', monospace;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .fight-btn:hover { box-shadow: 0 0 10px rgba(255,0,110,0.5); }
+
+    /* Leaderboard */
+    .lb-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .lb-row:last-child { border-bottom: none; }
+    .lb-rank { color: var(--neon-orange); font-family: 'VT323', monospace; font-size: 1.1rem; width: 30px; }
+    .lb-name { flex: 1; color: var(--text-bright); }
+    .lb-score { color: var(--neon-yellow); font-family: 'VT323', monospace; font-size: 1rem; }
+
+    /* Train page */
+    .train-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .train-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .train-card:hover {
+      border-color: var(--neon-teal);
+      box-shadow: 0 0 15px rgba(0,245,212,0.1);
+    }
+
+    .train-card .tc-icon { font-size: 2.5rem; display: block; margin-bottom: 8px; }
+    .train-card .tc-name { font-family: 'Oswald', sans-serif; color: var(--neon-teal); font-size: 0.9rem; letter-spacing: 2px; }
+    .train-card .tc-val { font-family: 'VT323', monospace; color: var(--text-bright); font-size: 1.4rem; margin-top: 4px; }
+    .train-card .tc-cost { font-size: 0.68rem; color: var(--neon-yellow); margin-top: 6px; }
+
+    /* OC district map */
+    .district-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .district-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .district-card:hover { border-color: var(--neon-yellow); }
+
+    .district-card .dc-name {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.95rem;
+      color: var(--neon-yellow);
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    .district-card .dc-desc { font-size: 0.7rem; color: var(--text-dim); line-height: 1.5; }
+    .district-card .dc-tag {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 2px 8px;
+      background: rgba(255,190,11,0.1);
+      border: 1px solid rgba(255,190,11,0.3);
+      border-radius: 2px;
+      font-size: 0.65rem;
+      color: var(--neon-yellow);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Section title */
+    .section-title {
+      font-family: 'VT323', monospace;
+      font-size: 1.5rem;
+      color: var(--neon-orange);
+      letter-spacing: 4px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+
+    .section-sub {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    /* Notification toast */
+    #toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      padding: 14px 24px;
+      background: var(--bg-panel);
+      border-left: 3px solid var(--neon-orange);
+      border-radius: 3px;
+      font-size: 0.85rem;
+      color: var(--text-bright);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+      transform: translateX(200%);
+      transition: transform 0.3s ease;
+      z-index: 1000;
+      max-width: 300px;
+    }
+
+    #toast.show { transform: translateX(0); }
+    #toast.success { border-color: var(--neon-teal); }
+    #toast.fail { border-color: var(--neon-pink); }
+
+    /* Progress ticker */
+    .ticker {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      padding: 6px 0;
+    }
+
+    /* Cooldown badge */
+    .cooldown {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(255,0,110,0.15);
+      border: 1px solid rgba(255,0,110,0.3);
+      color: var(--neon-pink);
+      font-size: 0.65rem;
+      border-radius: 2px;
+      letter-spacing: 1px;
+    }
+
+    /* Mobile collapse */
+    @media (max-width: 768px) {
+      .game-grid {
+        grid-template-columns: 1fr;
+      }
+      .game-grid > .panel:first-child { order: 2; }
+      .game-grid > .content-area { order: 1; }
+      .game-grid > .panel:last-child { order: 3; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── AUTH SCREEN ─── -->
+<div id="auth-screen">
+  <div class="auth-logo">
+    <h1>OC UNDERGROUND</h1>
+    <div class="subtitle">░ ORANGE COUNTY 1990 ░</div>
+    <div class="tagline">crime. power. survival. — you decide how far you go.</div>
+  </div>
+
+  <div class="auth-box">
+    <h2>[ ACCESS TERMINAL ]</h2>
+    <div id="login-form">
+      <input type="email" id="email" placeholder="email address">
+      <input type="password" id="password" placeholder="password">
+      <button class="btn btn-primary" id="login-btn">⏎ LOGIN</button>
+      <button class="btn btn-secondary" id="signup-btn">+ CREATE CHARACTER</button>
+    </div>
+    <div id="user-info" style="display:none; text-align:center;">
+      <p style="margin-bottom:12px; color:var(--text-dim); font-size:0.8rem;">
+        LOGGED IN AS: <strong id="user-email" style="color:var(--neon-teal);"></strong>
+      </p>
+      <button class="btn btn-danger" id="logout-btn">LOGOUT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── GAME SCREEN ─── -->
+<div id="game-screen">
+  <div class="game-header">
+    <div class="logo">OC <span>UNDERGROUND</span> <span style="color:var(--text-dim);font-size:1rem;">// 1990</span></div>
+    <div class="header-user">
+      <span>PLAYER: <strong id="hdr-name">—</strong></span>
+      <span>RANK: <strong id="hdr-rank" style="color:var(--neon-teal);">Street Punk</strong></span>
+      <button class="btn btn-danger" id="logout-btn2" style="font-size:0.9rem; padding:5px 14px; letter-spacing:1px;">LOGOUT</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+
+    <!-- LEFT: Player stats -->
+    <div>
+      <div class="panel" style="margin-bottom:12px;">
+        <div class="panel-header">// STATUS</div>
+        <div class="panel-body">
+          <div class="money-display" id="stat-money">$0</div>
+          <div class="money-label">CASH ON HAND</div>
+
+          <div style="margin-top:18px;">
+            <div class="stat-row">
+              <div class="stat-label">Health <span id="stat-health-val">100</span>/100</div>
+              <div class="stat-bar"><div class="stat-fill health-fill" id="stat-health" style="width:100%"></div></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-label">Energy <span id="stat-energy-val">100</span>/100</div>
+              <div class="stat-bar"><div class="stat-fill energy-fill" id="stat-energy" style="width:100%"></div></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-label">Nerve <span id="stat-nerve-val">100</span>/100</div>
+              <div class="stat-bar"><div class="stat-fill nerve-fill" id="stat-nerve" style="width:100%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">// STATS</div>
+        <div class="panel-body">
+          <div class="combat-stat">
+            <span>Strength</span>
+            <span class="val" id="stat-str">10</span>
+          </div>
+          <div class="combat-stat">
+            <span>Agility</span>
+            <span class="val" id="stat-agi">10</span>
+          </div>
+          <div class="combat-stat">
+            <span>Intelligence</span>
+            <span class="val" id="stat-int">10</span>
+          </div>
+          <div class="combat-stat">
+            <span>Wins</span>
+            <span class="val" id="stat-wins">0</span>
+          </div>
+          <div class="combat-stat">
+            <span>Losses</span>
+            <span class="val" id="stat-losses">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: Main content -->
+    <div class="content-area panel">
+
+      <!-- NAV TABS -->
+      <div style="display:flex; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.3); flex-wrap:wrap;">
+        <button class="nav-btn active" data-page="crimes" style="flex:1; border-bottom:none; border-right:1px solid var(--border); text-align:center; padding:12px 8px;">
+          <span class="icon">🔫</span>CRIMES
+        </button>
+        <button class="nav-btn" data-page="fight" style="flex:1; border-bottom:none; border-right:1px solid var(--border); text-align:center; padding:12px 8px;">
+          <span class="icon">⚔️</span>FIGHT
+        </button>
+        <button class="nav-btn" data-page="train" style="flex:1; border-bottom:none; border-right:1px solid var(--border); text-align:center; padding:12px 8px;">
+          <span class="icon">🏋</span>TRAIN
+        </button>
+        <button class="nav-btn" data-page="map" style="flex:1; border-bottom:none; text-align:center; padding:12px 8px;">
+          <span class="icon">🗺</span>DISTRICTS
+        </button>
+      </div>
+
+      <div class="panel-body">
+
+        <!-- CRIMES PAGE -->
+        <div id="page-crimes" class="game-page active">
+          <div class="section-title">// CRIMINAL ACTIVITY</div>
+          <div class="section-sub">Orange County has opportunity everywhere. Pick your hustle wisely — the Sheriff's department is watching. Each crime costs Nerve.</div>
+          <div class="actions-grid">
+            <div class="action-card" data-crime="pickpocket">
+              <span class="ac-icon">👜</span>
+              <div class="ac-title">Pickpocket</div>
+              <div class="ac-desc">Lift wallets at the Laguna Beach art festival</div>
+              <div class="ac-cost">⚡ 5 Nerve | 🎲 85% success</div>
+            </div>
+            <div class="action-card" data-crime="shoplifting">
+              <span class="ac-icon">🛍️</span>
+              <div class="ac-title">Shoplift</div>
+              <div class="ac-desc">Five-finger discount at South Coast Plaza</div>
+              <div class="ac-cost">⚡ 10 Nerve | 🎲 70% success</div>
+            </div>
+            <div class="action-card" data-crime="carjack">
+              <span class="ac-icon">🚗</span>
+              <div class="ac-title">Carjack</div>
+              <div class="ac-desc">Boost a Beemer in Newport Beach</div>
+              <div class="ac-cost">⚡ 20 Nerve | 🎲 50% success</div>
+            </div>
+            <div class="action-card" data-crime="dealerdrug">
+              <span class="ac-icon">💊</span>
+              <div class="ac-title">Deal Drugs</div>
+              <div class="ac-desc">Move product in Anaheim's back alleys</div>
+              <div class="ac-cost">⚡ 25 Nerve | 🎲 55% success</div>
+            </div>
+            <div class="action-card" data-crime="armrobbery">
+              <span class="ac-icon">🏦</span>
+              <div class="ac-title">Armed Robbery</div>
+              <div class="ac-desc">Hold up a check-cashing joint in Santa Ana</div>
+              <div class="ac-cost">⚡ 40 Nerve | 🎲 35% success</div>
+            </div>
+            <div class="action-card" data-crime="realestate">
+              <span class="ac-icon">🏡</span>
+              <div class="ac-title">Real Estate Fraud</div>
+              <div class="ac-desc">Forge deeds on Laguna Niguel parcels</div>
+              <div class="ac-cost">⚡ 35 Nerve | 🎲 45% success</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="section-title" style="font-size:1rem;">// ACTIVITY LOG</div>
+            <div class="event-log" id="crime-log">
+              <div class="log-entry"><span class="ts">[00:00]</span> <span class="info">Welcome to Orange County. 1990. Choose your path.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIGHT PAGE -->
+        <div id="page-fight" class="game-page">
+          <div class="section-title">// STREET FIGHTS</div>
+          <div class="section-sub">Attack other players to steal their cash and gain respect. Fighting costs Energy and may lower your Health.</div>
+
+          <div style="margin-bottom:12px; display:flex; align-items:center; gap:10px;">
+            <button class="btn btn-secondary" id="find-players-btn" style="width:auto; padding:8px 18px; font-size:1rem;">🔍 FIND TARGETS</button>
+            <span class="ticker" id="fight-ticker">// find someone to fight in OC...</span>
+          </div>
+
+          <div class="player-list" id="player-list">
+            <div style="padding:20px; text-align:center; color:var(--text-dim); font-size:0.8rem;">
+              Hit "FIND TARGETS" to scan Orange County for opponents.
+            </div>
+          </div>
+        </div>
+
+        <!-- TRAIN PAGE -->
+        <div id="page-train" class="game-page">
+          <div class="section-title">// TRAINING</div>
+          <div class="section-sub">Improve your stats at various OC locations. Each training session costs Energy and $50.</div>
+          <div class="train-grid">
+            <div class="train-card" data-train="strength">
+              <span class="tc-icon">💪</span>
+              <div class="tc-name">STRENGTH</div>
+              <div class="tc-val" id="tr-str">—</div>
+              <div class="tc-cost">Gold's Gym, Huntington Beach<br>⚡ 20 Energy | $50</div>
+            </div>
+            <div class="train-card" data-train="agility">
+              <span class="tc-icon">🏄</span>
+              <div class="tc-name">AGILITY</div>
+              <div class="tc-val" id="tr-agi">—</div>
+              <div class="tc-cost">Surfing, Seal Beach<br>⚡ 20 Energy | $50</div>
+            </div>
+            <div class="train-card" data-train="intelligence">
+              <span class="tc-icon">📚</span>
+              <div class="tc-name">INTELLIGENCE</div>
+              <div class="tc-val" id="tr-int">—</div>
+              <div class="tc-cost">UCI Library, Irvine<br>⚡ 20 Energy | $50</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MAP / DISTRICTS PAGE -->
+        <div id="page-map" class="game-page">
+          <div class="section-title">// OC DISTRICTS</div>
+          <div class="section-sub">Orange County 1990 — from the glitzy beaches of Newport to the hard streets of Santa Ana. Each district has unique opportunities.</div>
+          <div class="district-grid">
+            <div class="district-card">
+              <div class="dc-name">Newport Beach</div>
+              <div class="dc-desc">Old money, yacht clubs, real estate empires. White-collar crime central. The suits here play dirty too.</div>
+              <span class="dc-tag">⚖️ Fraud</span>
+            </div>
+            <div class="district-card">
+              <div class="dc-name">Santa Ana</div>
+              <div class="dc-desc">The gritty core. Street gangs, swap meets, hustle on every corner. High risk, high reward.</div>
+              <span class="dc-tag">🔫 Combat</span>
+            </div>
+            <div class="district-card">
+              <div class="dc-name">Huntington Beach</div>
+              <div class="dc-desc">Surf culture meets biker gangs. The Surf City riots just happened. Tension is high.</div>
+              <span class="dc-tag">🏄 Training</span>
+            </div>
+            <div class="district-card">
+              <div class="dc-name">Anaheim</div>
+              <div class="dc-desc">Theme parks, Angels stadium, and a shadow economy under the tourist smile. Drug routes pass through here.</div>
+              <span class="dc-tag">💊 Dealing</span>
+            </div>
+            <div class="district-card">
+              <div class="dc-name">Laguna Beach</div>
+              <div class="dc-desc">Artists, galleries, and tourists with fat wallets. The perfect mark. Upscale pickpocketing territory.</div>
+              <span class="dc-tag">👜 Theft</span>
+            </div>
+            <div class="district-card">
+              <div class="dc-name">Irvine</div>
+              <div class="dc-desc">Planned city, clean streets, big corporations. Corporate espionage and insider trading are the crimes of choice.</div>
+              <span class="dc-tag">🧠 Intelligence</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT: Leaderboard -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">// TOP CRIMINALS</div>
+        <div id="leaderboard-list">
+          <div style="padding:16px; text-align:center; color:var(--text-dim); font-size:0.75rem;">loading...</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px;">
+        <div class="panel-header">// SCANNER</div>
+        <div class="panel-body">
+          <div class="ticker">OC POLICE SCANNER — 1990</div>
+          <div class="event-log" id="scanner-log" style="height:120px; margin-top:8px;">
+            <div class="log-entry"><span class="ts">[08:12]</span> <span class="info">Unit 7 responding to 211 at PCH &amp; MacArthur...</span></div>
+            <div class="log-entry"><span class="ts">[08:45]</span> <span class="info">Disturbance at South Coast Plaza parking...</span></div>
+            <div class="log-entry"><span class="ts">[09:01]</span> <span class="info">Suspect fled on foot toward Main St, Santa Ana...</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>
